@@ -1,0 +1,3 @@
+name = English
+author = laingame.net (fan subtitles)
+version = 1
