@@ -318,7 +318,12 @@ static void draw_menu(const ImGuiViewport *vp) {
                 "Up", "Down", "Left", "Right", "Cross", "Circle", "Square", "Triangle",
                 "L1", "L2", "L3", "R1", "R2", "R3", "Start", "Select",
             };
+#ifdef __SWITCH__
+            ImGui::TextDisabled("%s", tr("Pad: A ○   B ×   X △   Y □   + Start   - Select"));
             ImGui::TextDisabled("%s", tr("Click a button, then press a key (Esc cancels)."));
+#else
+            ImGui::TextDisabled("%s", tr("Click a button, then press a key (Esc cancels)."));
+#endif
             if (ImGui::BeginTable("keys", 4, ImGuiTableFlags_SizingStretchSame)) {
                 for (int b = 0; b < SETTINGS_NUM_KEYS; b++) {
                     ImGui::TableNextColumn();

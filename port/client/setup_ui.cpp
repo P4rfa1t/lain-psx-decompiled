@@ -745,6 +745,7 @@ extern "C" int setup_ui_run(Settings *s) {
 #ifdef __SWITCH__
         ImGui::Dummy(ImVec2(0, 2));
         ImGui::TextDisabled("%s", tr("A Confirm    B Back    D-pad Select    Touch to tap"));
+        ImGui::TextDisabled("%s", tr("A ○    B ×    X △    Y □        + Start        - Select"));
 #endif
 
         ImGui::End();

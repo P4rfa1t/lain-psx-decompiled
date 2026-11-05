@@ -43,29 +43,8 @@ docker run --rm \
     fi
     "$DEVKITPRO/tools/bin/elf2nro" /tmp/s/lain.elf /tmp/pkg/Lain/lain.nro \
       --nacp=/tmp/s/lain.nacp $ICON
-    # CJK UI font (WenQuanYi Micro Hei, Apache-2.0/GPLv3+exception), so Chinese
-    # text does not fall back to the Latin-only ImGui default font.
-    mkdir -p /tmp/pkg/Lain/fonts
-    if [ -f /src/fonts/ui.ttf ]; then
-      cp /src/fonts/ui.ttf /tmp/pkg/Lain/fonts/ui.ttf
-    else
-      curl -L --fail --retry 3 -o /tmp/pkg/Lain/fonts/ui.ttf \
-        https://raw.githubusercontent.com/anthonyfok/fonts-wqy-microhei/master/wqy-microhei.ttc
-    fi
-    cp /src/fonts/LICENSE_*.txt /src/fonts/README-WQY.txt /tmp/pkg/Lain/fonts/ 2>/dev/null || true
-    # Launcher artwork (512x512 RGBA), drawn bottom-right of the setup screen.
-    if [ -f /src/assets/lain_logo.rgba ]; then
-      cp /src/assets/lain_logo.rgba /tmp/pkg/Lain/lain_logo.rgba
-    fi
     cp /src/LICENSE /tmp/pkg/Lain/LICENSE.txt
     cp -R /src/thirdparty /tmp/pkg/Lain/thirdparty
-    # Optional subtitle/dub packs staged in port/packs/<code>/ (gitignored, so
-    # no third-party translation enters the repository or CI artifacts).
-    if [ -d /src/packs ]; then
-      mkdir -p /tmp/pkg/Lain/lang
-      cp -R /src/packs/. /tmp/pkg/Lain/lang/
-      printf "\nSubtitle packs are included under lang/.\n" >> /tmp/pkg/Lain/README.txt
-    fi
     cat > /tmp/pkg/Lain/README.txt <<EOF
 Serial Experiments Lain (Nintendo Switch)
 
@@ -76,8 +55,9 @@ Discs: put your own .cue/.bin/.img dumps in sdmc:/switch/lain/discs/. The
 client verifies them and uses them in place - no copy and no import step.
 No game data is included.
 
-Subtitle/dub packs: sdmc:/switch/lain/lang/<code>/ and sdmc:/switch/lain/dub/<code>/.
-Chinese UI font: sdmc:/switch/lain/fonts/ui.ttf (included in this package).
+The Chinese UI font, the launcher artwork and the Chinese/English subtitle
+packs are built into lain.nro. On the first start they are written to
+sdmc:/switch/lain/ (fonts/, lang/, lain_logo.rgba); edit them there freely.
 EOF
     cd /tmp/pkg && rm -f /out/Lain-switch.zip && zip -qr /out/Lain-switch.zip Lain
   '

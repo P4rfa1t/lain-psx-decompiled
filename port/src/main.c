@@ -44,6 +44,7 @@
 #include "overlay.h"
 #include "app_icon.h"
 #include "i18n.h"
+#include "embedded_assets.h"
 #include "psx_arena.h"
 #include "psx_mem.h"
 #include "settings.h"
@@ -998,6 +999,14 @@ int main(int argc, char **argv) {
      * the launcher can navigate with the pad; failure is not fatal (keyboard). */
     if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) == 0) {
         SDL_GameControllerEventState(SDL_ENABLE);
+    }
+    /* Fonts, language packs and the launcher artwork are linked into the NRO;
+     * write them to the SD card once so the normal lookups find them. */
+    {
+        int n = lain_assets_extract();
+        if (n > 0) {
+            lain_log("assets: wrote %d built-in files", n);
+        }
     }
     Settings settings;
     settings_load(&settings);
