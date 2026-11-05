@@ -1323,8 +1323,8 @@ int GR_InitialisePSX()
 	GR_InitRG8LUT();
 	GR_GenerateCommonTextures();
 	GR_InitialisePSXShaders();
-	lain_log("renderer: GLES %d, PBO %d, offscreen blit %d, framebuffer blit %d, VRAM %dx%d",
-	         OGLES_VERSION, USE_PBO, USE_OFFSCREEN_BLIT, USE_FRAMEBUFFER_BLIT, VRAM_WIDTH, VRAM_HEIGHT);
+	lain_log("renderer: PBO %d, offscreen blit %d, framebuffer blit %d, VRAM %dx%d",
+	         USE_PBO, USE_OFFSCREEN_BLIT, USE_FRAMEBUFFER_BLIT, VRAM_WIDTH, VRAM_HEIGHT);
 
 #if USE_OPENGL
 	glDepthFunc(GL_LEQUAL);
