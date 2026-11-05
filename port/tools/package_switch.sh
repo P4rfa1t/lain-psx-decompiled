@@ -13,16 +13,14 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE"
 trap 'rm -rf "$STAGE"' EXIT
 cp -R port "$STAGE/port"
-cp LICENSE "$STAGE/LICENSE"
-cp -R thirdparty "$STAGE/thirdparty"
+cp LICENSE "$STAGE/port/LICENSE"
+cp -R thirdparty "$STAGE/port/thirdparty"
 # Docker Desktop on Windows needs C:/... paths; on Linux this is a no-op.
 docker_path() {
   if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
 }
 docker run --rm \
   -v "$(docker_path "$STAGE/port")":/src:ro \
-  -v "$(docker_path "$STAGE/LICENSE")":/lic/LICENSE:ro \
-  -v "$(docker_path "$STAGE/thirdparty")":/lic/thirdparty:ro \
   -v "$(docker_path "$PWD/dist")":/out \
   devkitpro/devkita64:latest bash -euc '
     dkp-pacman -S --needed --noconfirm \
@@ -46,7 +44,7 @@ docker run --rm \
     "$DEVKITPRO/tools/bin/elf2nro" /tmp/s/lain.elf /tmp/pkg/Lain/lain.nro \
       --nacp=/tmp/s/lain.nacp $ICON
     # CJK UI font (WenQuanYi Micro Hei, Apache-2.0/GPLv3+exception), so Chinese
-    # text does not fall back to ImGui's Latin-only font.
+    # text does not fall back to the Latin-only ImGui default font.
     mkdir -p /tmp/pkg/Lain/fonts
     if [ -f /src/fonts/ui.ttf ]; then
       cp /src/fonts/ui.ttf /tmp/pkg/Lain/fonts/ui.ttf
@@ -55,8 +53,8 @@ docker run --rm \
         https://raw.githubusercontent.com/anthonyfok/fonts-wqy-microhei/master/wqy-microhei.ttc
     fi
     cp /src/fonts/LICENSE_*.txt /src/fonts/README-WQY.txt /tmp/pkg/Lain/fonts/ 2>/dev/null || true
-    cp /lic/LICENSE /tmp/pkg/Lain/LICENSE.txt
-    cp -R /lic/thirdparty /tmp/pkg/Lain/thirdparty
+    cp /src/LICENSE /tmp/pkg/Lain/LICENSE.txt
+    cp -R /src/thirdparty /tmp/pkg/Lain/thirdparty
     # Optional subtitle/dub packs staged in port/packs/<code>/ (gitignored, so
     # no third-party translation enters the repository or CI artifacts).
     if [ -d /src/packs ]; then
