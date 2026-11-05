@@ -26,8 +26,7 @@ port/build/
 # Packaged builds
 dist/
 
-# Locally staged subtitle/dub packs (port/tools/package_switch.sh bundles these)
-port/packs/
+# Locally staged subtitle/dub packs are in port/packs/ (zh is committed).
 
 # objdiff-cli (tools/get_objdiff.sh)
 tools/bin/

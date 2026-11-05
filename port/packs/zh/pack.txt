@@ -1,0 +1,3 @@
+name = 简体中文
+author = laingame.net 英文原字幕 / 中文翻译
+version = 1
