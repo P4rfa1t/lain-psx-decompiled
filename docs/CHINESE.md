@@ -57,13 +57,13 @@ lain --make-subtitle-pack zh 简体中文
 
 ### 完整中文翻译包
 
-`lain-zh-subtitles.zip` 是一个完整的中文语言包：667 个节点、5250 条对白，时间轴沿用
-laingame.net 的英文粉丝字幕（该字幕属于其作者，不在本仓库内）。解压到数据目录的 `lang/`
-下，得到 `lang/zh/`，然后在启动器或 F1 菜单里选择「简体中文」即可。语言包的 SRT/ASS
-文件可以继续用 Subtitle Edit、Aegisub 等工具修改；名字保持不变就会按节点匹配。
+`port/packs/zh/` 是完整的中文语言包：667 个节点、5250 条对白，时间轴沿用
+laingame.net 的英文粉丝字幕（该字幕属于其作者，授权说明见 `port/packs/zh/README.txt`）。
+`port/tools/package_switch.sh` 会把它打进 `Lain/lang/zh/`，所以 Switch 发行包开箱即用。
 
-本地构建 Switch 版时，把语言包放到 `port/packs/zh/`（该目录被 `.gitignore` 忽略，不会提交），
-再运行 `port/tools/package_switch.sh`，生成的 `Lain-switch.zip` 会带上 `Lain/lang/zh/`。
+桌面端使用时，把 `port/packs/zh/` 复制到数据目录的 `lang/` 下（得到 `lang/zh/`），
+再在启动器或 F1 菜单里选择「简体中文」。SRT/ASS 可以继续用 Subtitle Edit、Aegisub
+修改；文件名保持不变就会按节点匹配。
 
 ### 双语字幕
 
