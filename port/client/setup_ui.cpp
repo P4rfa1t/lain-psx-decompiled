@@ -583,6 +583,18 @@ extern "C" int setup_ui_run(Settings *s) {
                            sizeof s->voice_lang, row_w)) {
                 lain_log("launcher: voice language %s", s->voice_lang);
             }
+
+            /* Lain in the lower right of this page, clear of the cards. Drawn
+             * into the page's own draw list so the child's scroll area clips it. */
+            if (logo_tex) {
+                const ImVec2 wp = ImGui::GetWindowPos();
+                const ImVec2 ws = ImGui::GetWindowSize();
+                const float art = 300.0f;
+                const float ax = wp.x + ws.x - art - 32.0f;
+                const float ay = wp.y + ws.y - art - 16.0f;
+                ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)logo_tex, ImVec2(ax, ay),
+                                                     ImVec2(ax + art, ay + art));
+            }
         }
 #else
         {
@@ -684,18 +696,6 @@ extern "C" int setup_ui_run(Settings *s) {
         ImGui::EndTabBar();
 #endif
 
-#ifdef __SWITCH__
-        /* Lain in the lower right, clear of the language cards. */
-        if (logo_tex) {
-            const ImVec2 wp = ImGui::GetWindowPos();
-            const ImVec2 ws = ImGui::GetWindowSize();
-            const float art = 300.0f;
-            const float ax = wp.x + ws.x - art - 56.0f;
-            const float ay = wp.y + ws.y - art - footer - 40.0f;
-            ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)logo_tex, ImVec2(ax, ay),
-                                                 ImVec2(ax + art, ay + art));
-        }
-#endif
         // Play
         ImGui::Separator();
         char p1[1024];

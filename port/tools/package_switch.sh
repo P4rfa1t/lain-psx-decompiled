@@ -19,7 +19,8 @@ cp -R thirdparty "$STAGE/port/thirdparty"
 docker_path() {
   if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
 }
-docker run --rm \
+OUT_NAME="${LAIN_SWITCH_ZIP:-Lain-switch.zip}"
+docker run --rm -e OUT_NAME="$OUT_NAME" \
   -v "$(docker_path "$STAGE/port")":/src:ro \
   -v "$(docker_path "$PWD/dist")":/out \
   devkitpro/devkita64:latest bash -euc '
@@ -59,6 +60,6 @@ The Chinese UI font, the launcher artwork and the Chinese/English subtitle
 packs are built into lain.nro. On the first start they are written to
 sdmc:/switch/lain/ (fonts/, lang/, lain_logo.rgba); edit them there freely.
 EOF
-    cd /tmp/pkg && rm -f /out/Lain-switch.zip && zip -qr /out/Lain-switch.zip Lain
+    cd /tmp/pkg && rm -f "/out/$OUT_NAME" && zip -qr "/out/$OUT_NAME" Lain
   '
-ls -la dist/Lain-switch.zip
+ls -la "dist/$OUT_NAME"

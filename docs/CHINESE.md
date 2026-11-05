@@ -116,9 +116,10 @@ ASCII**，由游戏自己的 4bpp 位图字体绘制：
   想修改可编辑该文件的 `vsync`、`smooth`、`render_scale`。
 - 光盘：把 `.cue`/`.bin`/`.img` 放到 `sdmc:/switch/lain/discs/`。首次启动会校验并**原地读取**，
   不复制镜像、也不需要手动导入；首次在启动器按一次「开始游戏」后，以后直接进入游戏。
-- 中文界面字体：压缩包自带 `fonts/ui.ttf`（文泉驿微米黑，Apache-2.0/GPLv3+字体例外），
-  解压后位于 `sdmc:/switch/lain/fonts/ui.ttf`，中文不会再显示为问号。
-- 字幕包：`lang/zh/` 已包含在整合包中，共 667 个节点。
+- 字体、语言包与立绘：中文界面字体（文泉驿微米黑，Apache-2.0/GPLv3+字体例外）、
+  `lang/zh`（667 个节点）、`lang/en` 和右下角立绘都**打包在 lain.nro 内**；
+  首次启动自动写入 `sdmc:/switch/lain/`（`fonts/`、`lang/`、`lain_logo.rgba`），
+  之后可以自由修改，不会被覆盖。压缩包本身只有 lain.nro、许可和说明。
 - 日志：`sdmc:/switch/lain/lain.log`（每次启动重新写入）。带时间戳记录设置、光盘扫描结果、
   窗口与 GL/FBO 状态、音频设备与欠载次数、手柄初始化，并每 10 秒输出一次心跳
   （帧率、vblank、已混音帧数）。遇到黑屏、爆音或卡死时，把这份日志发出来即可定位。
