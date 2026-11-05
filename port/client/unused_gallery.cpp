@@ -10,6 +10,7 @@
 #include <exception>
 
 #include "iso.h"
+#include "i18n.h"
 #include "napk.h"
 #include "tim.h"
 
@@ -412,7 +413,7 @@ bool gallery_load(const char *disc1_bin, const char *disc2_bin, std::vector<Gall
         return gallery_load_unchecked(disc1_bin, disc2_bin, out, err);
     } catch (const std::exception &e) {
         out.clear();
-        err = std::string("Couldn't read the discs: ") + e.what();
+        err = std::string(tr("Couldn't read the discs: ")) + e.what();
         return false;
     }
 }
@@ -424,7 +425,7 @@ static bool gallery_load_unchecked(const char *disc1_bin, const char *disc2_bin,
     d2.f = disc2_bin ? fopen(disc2_bin, "rb") : nullptr;
     std::vector<uint8_t> exe = d1.file("SLPS_016.03");
     if (exe.size() < 0x90000) {
-        err = "Couldn't read disc 1 (import it first).";
+        err = tr("Couldn't read disc 1 (import it first).");
         return false;
     }
     out.clear();

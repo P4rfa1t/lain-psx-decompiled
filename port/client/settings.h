@@ -17,6 +17,7 @@ typedef struct {
     int cheat_genome;     /* cheat: saves always get the rare "Genome" title */
     char text_lang[64];   /* "ja" (original) or a subtitle/UI pack code, e.g. "en" */
     char voice_lang[64];  /* "ja" (original) or an installed dub pack code */
+    char ui_lang[8];      /* "auto", "zh" or "en", the client's own language */
     int setup_done;       /* setup window completed at least once */
     /* Installed mods in load order (later ones win), each "+folder" (on) or
      * "-folder" (off), separated by '|'. Folders not listed are new: on, last. */

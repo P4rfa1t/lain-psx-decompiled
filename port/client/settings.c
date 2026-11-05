@@ -53,6 +53,7 @@ void settings_defaults(Settings *s) {
     s->volume = 100;
     strcpy(s->text_lang, "ja");
     strcpy(s->voice_lang, "ja");
+    strcpy(s->ui_lang, "auto");
     for (int i = 0; i < SETTINGS_NUM_KEYS; i++) {
         snprintf(s->keys[i], sizeof s->keys[i], "%s", DEFAULT_KEYS[i]);
     }
@@ -87,6 +88,7 @@ void settings_load(Settings *s) {
         else if (!strcmp(key, "cheat_genome")) s->cheat_genome = atoi(val);
         else if (!strcmp(key, "text_lang")) snprintf(s->text_lang, sizeof s->text_lang, "%s", val);
         else if (!strcmp(key, "voice_lang")) snprintf(s->voice_lang, sizeof s->voice_lang, "%s", val);
+        else if (!strcmp(key, "ui_lang")) snprintf(s->ui_lang, sizeof s->ui_lang, "%s", val);
         else if (!strcmp(key, "setup_done")) s->setup_done = atoi(val);
         else if (!strcmp(key, "mods")) snprintf(s->mods, sizeof s->mods, "%s", val);
         else if (!strcmp(key, "dump_textures")) s->dump_textures = atoi(val);

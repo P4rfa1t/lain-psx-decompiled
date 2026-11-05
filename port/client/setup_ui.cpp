@@ -18,6 +18,8 @@
 #include "mods_ui.h"
 #include "unused_gallery.h"
 #include "app_icon.h"
+#include "i18n.h"
+#include "ui_font.h"
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl2.h"
@@ -140,12 +142,12 @@ void gallery_draw(Gallery &g) {
         gallery_start(g);
     }
     if (g.state == 1) {
-        ImGui::TextDisabled("Reading your discs...");
+        ImGui::TextDisabled("%s", tr("Reading your discs..."));
         return;
     }
     if (g.state == 3) {
         ImGui::TextWrapped("%s", g.error.c_str());
-        if (ImGui::Button("Try again")) {
+        if (ImGui::Button(tr("Try again"))) {
             g.state = 0; // e.g. after importing disc 1
         }
         return;
@@ -153,13 +155,13 @@ void gallery_draw(Gallery &g) {
     if (!g.uploaded) {
         gallery_upload(g);
     }
-    ImGui::TextWrapped("Things on the Serial Experiments Lain discs that the game never shows, "
-                       "decoded from your own discs. Found while decompiling the game.");
+    ImGui::TextWrapped("%s", tr("Things on the Serial Experiments Lain discs that the game never shows, "
+                                "decoded from your own discs. Found while decompiling the game."));
     const double now = ImGui::GetTime();
     size_t n = 0;
     for (auto &sec : g.sections) {
-        ImGui::SeparatorText(sec.title.c_str());
-        ImGui::TextWrapped("%s", sec.intro.c_str());
+        ImGui::SeparatorText(tr(sec.title.c_str()));
+        ImGui::TextWrapped("%s", tr(sec.intro.c_str()));
         const float avail = ImGui::GetContentRegionAvail().x;
         float x = 0;
         for (size_t i = 0; i < sec.items.size(); i++, n++) {
@@ -170,16 +172,16 @@ void gallery_draw(Gallery &g) {
                 // A sound: Play/Stop, its length, what it is.
                 if (g_playing == &it && g_audio && SDL_GetQueuedAudioSize(g_audio) == 0) g_playing = nullptr;
                 ImGui::PushID((int)n);
-                if (ImGui::Button(g_playing == &it ? "Stop" : "Play", ImVec2(70, 0))) {
+                if (ImGui::Button(g_playing == &it ? tr("Stop") : tr("Play sound"), ImVec2(70, 0))) {
                     if (g_playing == &it) sound_stop();
                     else sound_play(it);
                 }
                 ImGui::PopID();
                 ImGui::SameLine();
-                ImGui::Text("%s", it.title.c_str());
+                ImGui::Text("%s", tr(it.title.c_str()));
                 ImGui::SameLine();
-                ImGui::TextDisabled("(%.1f s)", it.pcm.size() / (double)it.channels / it.rate);
-                ImGui::TextWrapped("%s", it.caption.c_str());
+                ImGui::TextDisabled(tr("(%.1f s)"), it.pcm.size() / (double)it.channels / it.rate);
+                ImGui::TextWrapped("%s", tr(it.caption.c_str()));
                 x = 0;
                 continue;
             }
@@ -198,12 +200,12 @@ void gallery_draw(Gallery &g) {
             ImGui::BeginGroup();
             ImGui::Image((ImTextureID)(intptr_t)tex[frame], size);
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + cell);
-            ImGui::TextUnformatted(it.title.c_str());
+            ImGui::TextUnformatted(tr(it.title.c_str()));
             if (it.fps > 0) {
                 ImGui::SameLine();
-                ImGui::TextDisabled("(%zu frames)", tex.size());
+                ImGui::TextDisabled(tr("(%zu frames)"), tex.size());
             }
-            ImGui::TextDisabled("%s", it.caption.c_str());
+            ImGui::TextDisabled("%s", tr(it.caption.c_str()));
             ImGui::PopTextWrapPos();
             ImGui::EndGroup();
         }
@@ -218,7 +220,7 @@ extern "C" int setup_ui_run(Settings *s) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-    SDL_Window *win = SDL_CreateWindow("Serial Experiments Lain - Setup", SDL_WINDOWPOS_CENTERED,
+    SDL_Window *win = SDL_CreateWindow(tr("Serial Experiments Lain - Setup"), SDL_WINDOWPOS_CENTERED,
                                        SDL_WINDOWPOS_CENTERED, 720, 640,
                                        SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!win) {
@@ -227,6 +229,11 @@ extern "C" int setup_ui_run(Settings *s) {
     }
     app_icon_apply(win);
     SDL_GLContext gl = SDL_GL_CreateContext(win);
+    if (!gl) {
+        fprintf(stderr, "setup window: no GL context: %s\n", SDL_GetError());
+        SDL_DestroyWindow(win);
+        return 0;
+    }
     SDL_GL_MakeCurrent(win, gl);
     SDL_GL_SetSwapInterval(1);
 
@@ -238,9 +245,10 @@ extern "C" int setup_ui_run(Settings *s) {
     ImGui::GetStyle().WindowRounding = 0;
     ImGui_ImplSDL2_InitForOpenGL(win, gl);
     ImGui_ImplOpenGL3_Init(glsl);
+    ui_font_load(18.0f);
 
-    std::vector<PackOption> text_langs = find_packs("lang", "Japanese (original)");
-    std::vector<PackOption> voice_langs = find_packs("dub", "Japanese (original)");
+    std::vector<PackOption> text_langs = find_packs("lang", tr("Japanese (original)"));
+    std::vector<PackOption> voice_langs = find_packs("dub", tr("Japanese (original)"));
     // Static: their worker threads write into them and may still be running when the
     // window closes (Play, Quit), so they must outlive this function.
     static ImportJob job;
@@ -256,6 +264,10 @@ extern "C" int setup_ui_run(Settings *s) {
     while (result < 0) {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
+            /* On the Switch the pad is fed below from libnx with Nintendo
+             * semantics (A = confirm). SDL would add the Xbox-positional
+             * mapping on top of it (its B button is the bottom one, so it
+             * would flip confirm/cancel), so its pad events are dropped. */
             ImGui_ImplSDL2_ProcessEvent(&ev);
             if (ev.type == SDL_QUIT) {
                 result = 0;
@@ -282,7 +294,7 @@ extern "C" int setup_ui_run(Settings *s) {
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
         ImGui::TextUnformatted("Serial Experiments Lain");
-        ImGui::TextDisabled("Native client. Game data comes from your own discs.");
+        ImGui::TextDisabled("%s", tr("Native client. Game data comes from your own discs."));
         ImGui::Separator();
 
         const bool busy = job.state == IMPORT_RUNNING;
@@ -290,29 +302,29 @@ extern "C" int setup_ui_run(Settings *s) {
         if (subjob.state == SubJob::DONE || subjob.state == SubJob::FAILED) {
             sub_message = subjob.message;
             if (subjob.state == SubJob::DONE) {
-                text_langs = find_packs("lang", "Japanese (original)");
+                text_langs = find_packs("lang", tr("Japanese (original)"));
                 snprintf(s->text_lang, sizeof s->text_lang, "%s", subjob.code.c_str());
             }
             subjob.state = SubJob::IDLE;
         }
         const bool sub_busy = subjob.state == SubJob::RUNNING;
-        // Tabs; Play/Quit stay below them.
+        // Tabs; Play/Quit stay below them. The console only needs language.
         const float footer = 64.0f;
         ImGui::BeginTabBar("launcher");
-        const bool setup_tab = ImGui::BeginTabItem("Setup");
+        const bool setup_tab = ImGui::BeginTabItem(tr("Setup"));
         if (setup_tab) {
             ImGui::BeginChild("setup_page", ImVec2(0, -footer));
         }
         if (setup_tab) {
         // Discs
-        ImGui::SeparatorText("Discs");
-        ImGui::Text("Disc 1 (Site A): %s", disc_status(DISC_1));
-        ImGui::Text("Disc 2 (Site B): %s", disc_status(DISC_2));
+        ImGui::SeparatorText(tr("Discs"));
+        ImGui::Text(tr("Disc 1 (Site A): %s"), tr(disc_status(DISC_1)));
+        ImGui::Text(tr("Disc 2 (Site B): %s"), tr(disc_status(DISC_2)));
         ImGui::BeginDisabled(busy);
-        if (ImGui::Button("Add disc...")) {
-            const char *filters[] = {"*.cue", "*.bin"};
-            const char *picked = tinyfd_openFileDialog("Choose a Serial Experiments Lain disc", "", 2, filters,
-                                                       "Disc image (.cue, .bin)", 1);
+        if (ImGui::Button(tr("Add disc..."))) {
+            const char *filters[] = {"*.cue", "*.bin", "*.img"};
+            const char *picked = tinyfd_openFileDialog(tr("Choose a Serial Experiments Lain disc"), "", 3, filters,
+                                                       tr("Disc image (.cue, .bin, .img)"), 1);
             if (picked) {
                 // Multiple selections come back separated by '|'.
                 std::string all = picked;
@@ -326,22 +338,22 @@ extern "C" int setup_ui_run(Settings *s) {
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
-        ImGui::TextDisabled("or drop .cue files on this window. Either disc, any order.");
+        ImGui::TextDisabled("%s", tr("or drop .cue, .bin or .img files on this window. Either disc, any order."));
         if (busy) {
-            ImGui::ProgressBar(job.progress, ImVec2(-1, 0), "Importing and verifying...");
+            ImGui::ProgressBar(job.progress, ImVec2(-1, 0), tr("Importing and verifying..."));
         } else if (!last_message.empty()) {
             ImGui::TextWrapped("%s", last_message.c_str());
         }
 
         // Display
-        ImGui::SeparatorText("Display");
-        ImGui::RadioButton("Windowed", &s->fullscreen, 0);
+        ImGui::SeparatorText(tr("Display"));
+        ImGui::RadioButton(tr("Windowed"), &s->fullscreen, 0);
         ImGui::SameLine();
-        ImGui::RadioButton("Fullscreen", &s->fullscreen, 1);
+        ImGui::RadioButton(tr("Fullscreen"), &s->fullscreen, 1);
         ImGui::BeginDisabled(s->fullscreen);
         char cur[32];
         snprintf(cur, sizeof cur, "%d x %d", s->width, s->height);
-        if (ImGui::BeginCombo("Window size", cur)) {
+        if (ImGui::BeginCombo(tr("Window size"), cur)) {
             for (const WindowSize &ws : kSizes) {
                 char label[32];
                 snprintf(label, sizeof label, "%d x %d", ws.w, ws.h);
@@ -353,27 +365,46 @@ extern "C" int setup_ui_run(Settings *s) {
             ImGui::EndCombo();
         }
         ImGui::EndDisabled();
-        ImGui::SliderInt("Render scale", &s->render_scale, 0, 8, s->render_scale ? "%dx" : "Auto");
+        ImGui::SliderInt(tr("Render scale"), &s->render_scale, 0, 8, s->render_scale ? "%dx" : tr("Auto"));
         ImGui::SameLine();
         if (s->render_scale) {
-            ImGui::TextDisabled("(%d x %d internal)", 320 * s->render_scale, 240 * s->render_scale);
+            ImGui::TextDisabled(tr("(%d x %d internal)"), 320 * s->render_scale, 240 * s->render_scale);
         } else {
-            ImGui::TextDisabled("(window resolution; 1x = original pixels)");
+            ImGui::TextDisabled("%s", tr("(window resolution; 1x = original pixels)"));
         }
         bool vsync = s->vsync != 0;
-        if (ImGui::Checkbox("VSync", &vsync)) {
+        if (ImGui::Checkbox(tr("VSync"), &vsync)) {
             s->vsync = vsync;
         }
         ImGui::SameLine();
         bool smooth = s->smooth != 0;
-        if (ImGui::Checkbox("Smooth motion (60 fps)", &smooth)) {
+        if (ImGui::Checkbox(tr("Smooth motion (60 fps)"), &smooth)) {
             s->smooth = smooth;
         }
         ImGui::SameLine();
-        ImGui::TextDisabled("12/30 fps screens get in-between frames; game speed unchanged");
+        ImGui::TextDisabled("%s", tr("12/30 fps screens get in-between frames; game speed unchanged"));
 
         // Language
-        ImGui::SeparatorText("Language");
+        ImGui::SeparatorText(tr("Language"));
+        {
+            const char *ui_codes[] = {"auto", "zh", "en"};
+            const char *ui_labels[] = {tr("Auto (system)"), "简体中文", "English"};
+            int cur_ui = 0;
+            for (int i = 0; i < 3; i++) {
+                if (strcmp(s->ui_lang, ui_codes[i]) == 0) cur_ui = i;
+            }
+            if (ImGui::BeginCombo(tr("Interface language"), ui_labels[cur_ui])) {
+                for (int i = 0; i < 3; i++) {
+                    if (ImGui::Selectable(ui_labels[i], cur_ui == i)) {
+                        snprintf(s->ui_lang, sizeof s->ui_lang, "%s", ui_codes[i]);
+                        i18n_set_language(s->ui_lang);
+                        text_langs = find_packs("lang", tr("Japanese (original)"));
+                        voice_langs = find_packs("dub", tr("Japanese (original)"));
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        }
         auto lang_combo = [](const char *label, std::vector<PackOption> &opts, char *code, size_t cap) {
             const char *shown = opts[0].label.c_str();
             for (auto &o : opts) {
@@ -388,8 +419,8 @@ extern "C" int setup_ui_run(Settings *s) {
                 ImGui::EndCombo();
             }
         };
-        lang_combo("Text / subtitles", text_langs, s->text_lang, sizeof s->text_lang);
-        lang_combo("Voices", voice_langs, s->voice_lang, sizeof s->voice_lang);
+        lang_combo(tr("Text / subtitles"), text_langs, s->text_lang, sizeof s->text_lang);
+        lang_combo(tr("Voices"), voice_langs, s->voice_lang, sizeof s->voice_lang);
 
         // Subtitles are not part of this program: players fetch a published fan set
         // with one click, or add a folder of .ass/.srt files they already have.
@@ -403,8 +434,8 @@ extern "C" int setup_ui_run(Settings *s) {
             ImGui::TextDisabled("%s", kSubSources[i].credit);
             ImGui::PopID();
         }
-        if (ImGui::Button("Add subtitle folder...")) {
-            const char *dir = tinyfd_selectFolderDialog("Folder with .ass or .srt subtitle files", "");
+        if (ImGui::Button(tr("Add subtitle folder..."))) {
+            const char *dir = tinyfd_selectFolderDialog(tr("Folder with .ass or .srt subtitle files"), "");
             if (dir) {
                 sub_import_folder_start(&subjob, dir);
             }
@@ -412,11 +443,11 @@ extern "C" int setup_ui_run(Settings *s) {
         ImGui::EndDisabled();
         ImGui::SameLine();
         if (sub_busy) {
-            ImGui::TextDisabled("Working...");
+            ImGui::TextDisabled("%s", tr("Working..."));
         } else if (!sub_message.empty()) {
             ImGui::TextWrapped("%s", sub_message.c_str());
         } else {
-            ImGui::TextDisabled("Packs live in: %slang", settings_data_dir());
+            ImGui::TextDisabled(tr("Packs live in: %slang"), settings_data_dir());
         }
 
         }
@@ -430,13 +461,13 @@ extern "C" int setup_ui_run(Settings *s) {
         const bool open_unused = want_tab && !strcmp(want_tab, "unused");
         const bool open_mods = want_tab && !strcmp(want_tab, "mods");
         first_frame = false;
-        if (ImGui::BeginTabItem("Mods", nullptr, open_mods ? ImGuiTabItemFlags_SetSelected : 0)) {
+        if (ImGui::BeginTabItem(tr("Mods"), nullptr, open_mods ? ImGuiTabItemFlags_SetSelected : 0)) {
             ImGui::BeginChild("mods_page", ImVec2(0, -footer));
             mods_tab_draw(s);
             ImGui::EndChild();
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Unused", nullptr, open_unused ? ImGuiTabItemFlags_SetSelected : 0)) {
+        if (ImGui::BeginTabItem(tr("Unused"), nullptr, open_unused ? ImGuiTabItemFlags_SetSelected : 0)) {
             ImGui::BeginChild("unused_page", ImVec2(0, -footer));
             gallery_draw(gallery);
             ImGui::EndChild();
@@ -448,20 +479,27 @@ extern "C" int setup_ui_run(Settings *s) {
         ImGui::Separator();
         char p1[1024];
         bool have_disc1 = discs_imported(settings_data_dir(), DISC_1, p1, sizeof p1);
-        ImGui::BeginDisabled(!have_disc1 || busy || sub_busy);
-        if (ImGui::Button("Play", ImVec2(160, 40))) {
-            s->setup_done = 1;
-            settings_save(s);
-            result = 1;
+        ImGui::BeginDisabled(busy || sub_busy);
+        const ImVec2 play_size(160, 40), quit_size(100, 40);
+        if (ImGui::Button(tr("Play game"), play_size)) {
+            if (!have_disc1) {
+                char miss[512];
+                snprintf(miss, sizeof miss, "%s", tr("Import disc 1 to play. Disc 2 is needed for Site B."));
+                last_message = miss;
+            } else {
+                s->setup_done = 1;
+                settings_save(s);
+                result = 1;
+            }
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
-        if (ImGui::Button("Quit", ImVec2(100, 40))) {
+        if (ImGui::Button(tr("Quit"), quit_size)) {
             result = 0;
         }
         if (!have_disc1) {
             ImGui::SameLine();
-            ImGui::TextDisabled("Import disc 1 to play. Disc 2 is needed for Site B.");
+            ImGui::TextDisabled("%s", tr("Import disc 1 to play. Disc 2 is needed for Site B."));
         }
 
         ImGui::End();

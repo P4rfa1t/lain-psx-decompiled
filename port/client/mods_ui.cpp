@@ -13,6 +13,7 @@
 #include <SDL.h>
 
 #include "discs.h"
+#include "i18n.h"
 #include "imgui.h"
 #include "mods.h"
 
@@ -110,17 +111,17 @@ void draw_details(const ModInfo &m) {
         ImGui::SameLine();
         ImGui::TextDisabled("%s", m.version.c_str());
     }
-    if (!m.author.empty()) ImGui::TextDisabled("by %s", m.author.c_str());
-    ImGui::TextDisabled("Folder: mods/%s", m.folder.c_str());
+    if (!m.author.empty()) ImGui::TextDisabled(tr("by %s"), m.author.c_str());
+    ImGui::TextDisabled(tr("Folder: mods/%s"), m.folder.c_str());
     if (!m.description.empty()) {
         ImGui::Spacing();
         ImGui::TextWrapped("%s", m.description.c_str());
     }
     ImGui::Spacing();
-    ImGui::SeparatorText("Files");
+    ImGui::SeparatorText(tr("Files"));
     if (m.files.empty() && !m.has_script && m.plugins.empty() && m.data.empty()) {
-        ImGui::TextDisabled("Nothing in this mod yet. Replacement files go in folders named after the");
-        ImGui::TextDisabled("archive (SITEA.BIN/0631.png), a script in main.lua. See MODDING.md.");
+        ImGui::TextDisabled("%s", tr("Nothing in this mod yet. Replacement files go in folders named after the"));
+        ImGui::TextDisabled("%s", tr("archive (SITEA.BIN/0631.png), a script in main.lua. See MODDING.md."));
     }
     if (ImGui::BeginTable("files", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
         for (const ModFile &f : m.files) {
@@ -129,9 +130,9 @@ void draw_details(const ModInfo &m) {
             ImGui::TextUnformatted(f.path.c_str());
             ImGui::TableNextColumn();
             if (!g_tab.checked && f.level != 2) {
-                ImGui::TextDisabled("checking...");
+                ImGui::TextDisabled("%s", tr("checking..."));
             } else {
-                const char *what = f.level == 2 ? "not used" : "used";
+                const char *what = f.level == 2 ? tr("not used") : tr("used");
                 ImGui::TextColored(level_color(f.level), "%s", what);
                 if (!f.note.empty()) {
                     ImGui::SameLine();
@@ -143,19 +144,19 @@ void draw_details(const ModInfo &m) {
     }
     if (m.textures) {
         ImGui::Spacing();
-        ImGui::BulletText("Texture pack: %d HD texture%s", m.textures, m.textures == 1 ? "" : "s");
+        ImGui::BulletText(tr("Texture pack: %d HD texture%s"), m.textures, m.textures == 1 ? "" : "s");
     }
     if (m.has_script || !m.plugins.empty()) {
         ImGui::Spacing();
-        ImGui::SeparatorText("Code");
-        if (m.has_script) ImGui::BulletText("Script: main.lua (%d Lua file%s)", (int)m.scripts.size(), m.scripts.size() == 1 ? "" : "s");
-        else if (!m.scripts.empty()) ImGui::BulletText("Lua files without a main.lua (not run)");
-        for (const std::string &p : m.plugins) ImGui::BulletText("Plugin: %s", p.c_str());
-        ImGui::TextDisabled("Script and plugin messages appear in the F1 menu's Mods tab.");
+        ImGui::SeparatorText(tr("Code"));
+        if (m.has_script) ImGui::BulletText(tr("Script: main.lua (%d Lua file%s)"), (int)m.scripts.size(), m.scripts.size() == 1 ? "" : "s");
+        else if (!m.scripts.empty()) ImGui::BulletText("%s", tr("Lua files without a main.lua (not run)"));
+        for (const std::string &p : m.plugins) ImGui::BulletText(tr("Plugin: %s"), p.c_str());
+        ImGui::TextDisabled("%s", tr("Script and plugin messages appear in the F1 menu's Mods tab."));
     }
     if (!m.ignored.empty()) {
         ImGui::Spacing();
-        ImGui::TextDisabled("Ignored (not named like a replacement):");
+        ImGui::TextDisabled("%s", tr("Ignored (not named like a replacement):"));
         for (const std::string &g : m.ignored) ImGui::BulletText("%s", g.c_str());
     }
 }
@@ -182,27 +183,29 @@ void mods_tab_draw(Settings *s) {
     std::string d1, d2;
     const bool have1 = disc_paths(d1, d2);
 
-    ImGui::TextWrapped("Mods replace pictures, text, voices and other game files with your own. "
-                       "They are applied when you press Play; your discs are never changed.");
-    if (ImGui::Button("Open mods folder")) open_folder(mods_dir());
+    ImGui::TextWrapped("%s%s", tr("Mods replace pictures, text, voices and other game files with your own. "),
+                       tr("They are applied when you press Play; your discs are never changed."));
+    if (ImGui::Button(tr("Open mods folder"))) open_folder(mods_dir());
     ImGui::SameLine();
-    if (ImGui::Button("Refresh")) refresh(s);
+    if (ImGui::Button(tr("Refresh"))) refresh(s);
     ImGui::SameLine();
     if (!t.naming) {
-        if (ImGui::Button("New mod...")) {
+        if (ImGui::Button(tr("New mod..."))) {
             t.naming = true;
             t.new_name[0] = 0;
         }
     } else {
         ImGui::SetNextItemWidth(180);
         if (ImGui::IsWindowAppearing() || !ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
-        bool enter = ImGui::InputTextWithHint("##name", "Mod name", t.new_name, sizeof t.new_name,
+        bool enter = ImGui::InputTextWithHint("##name", tr("Mod name"), t.new_name, sizeof t.new_name,
                                               ImGuiInputTextFlags_EnterReturnsTrue);
         ImGui::SameLine();
-        if (ImGui::Button("Create") || enter) {
+        if (ImGui::Button(tr("Create")) || enter) {
             std::string folder, err;
             if (mods_create(t.new_name, folder, err)) {
-                t.message = "Created mods/" + folder + ". Add replacement files to it.";
+                char msg[512];
+                snprintf(msg, sizeof msg, tr("Created mods/%s. Add replacement files to it."), folder.c_str());
+                t.message = msg;
                 t.naming = false;
                 t.mods = mods_scan(s->mods); /* save_order checks them */
                 for (size_t i = 0; i < t.mods.size(); i++) {
@@ -215,12 +218,12 @@ void mods_tab_draw(Settings *s) {
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancel")) t.naming = false;
+        if (ImGui::Button(tr("Cancel"))) t.naming = false;
     }
     ImGui::SameLine();
     const bool exporting = t.exp && t.exp->state == 1;
     ImGui::BeginDisabled(!have1 || exporting);
-    if (ImGui::Button("Export originals")) {
+    if (ImGui::Button(tr("Export originals"))) {
         auto job = std::make_shared<ExportJob>();
         job->dir = mods_dir() + "/_originals";
         job->state = 1;
@@ -234,47 +237,47 @@ void mods_tab_draw(Settings *s) {
     }
     ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip("Writes every picture, voice and file of your discs to mods/_originals,\n"
-                          "as files a mod can replace. Copy the ones you want to change into your mod.");
+        ImGui::SetTooltip("%s", tr("Writes every picture, voice and file of your discs to mods/_originals,\n"
+                                   "as files a mod can replace. Copy the ones you want to change into your mod."));
     }
 
     if (exporting) {
-        ImGui::ProgressBar(t.exp->progress, ImVec2(-1, 0), "Exporting originals...");
+        ImGui::ProgressBar(t.exp->progress, ImVec2(-1, 0), tr("Exporting originals..."));
     } else if (t.exp && t.exp->state == 2) {
         if (t.exp->written > 0) {
-            ImGui::Text("Exported %d files to mods/_originals.", t.exp->written);
+            ImGui::Text(tr("Exported %d files to mods/_originals."), t.exp->written);
             ImGui::SameLine();
-            if (ImGui::SmallButton("Open")) open_folder(t.exp->dir);
+            if (ImGui::SmallButton(tr("Open"))) open_folder(t.exp->dir);
         } else {
-            ImGui::TextColored(level_color(2), "Export failed: %s", t.exp->msg);
+            ImGui::TextColored(level_color(2), tr("Export failed: %s"), t.exp->msg);
         }
     } else if (!t.message.empty()) {
         ImGui::TextWrapped("%s", t.message.c_str());
     } else if (!have1) {
-        ImGui::TextDisabled("Import disc 1 on the Setup tab to check and use mods.");
+        ImGui::TextDisabled("%s", tr("Import disc 1 on the Setup tab to check and use mods."));
     }
     bool dump = s->dump_textures != 0;
-    if (ImGui::Checkbox("Save the game's textures while playing", &dump)) {
+    if (ImGui::Checkbox(tr("Save the game's textures while playing"), &dump)) {
         s->dump_textures = dump;
         settings_save(s);
     }
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Every picture the game draws is saved to the texture_dump folder, named for a\n"
-                          "texture pack: upscale one, keep its name, put it in a mod's textures folder.");
+        ImGui::SetTooltip("%s", tr("Every picture the game draws is saved to the texture_dump folder, named for a\n"
+                                   "texture pack: upscale one, keep its name, put it in a mod's textures folder."));
     }
     ImGui::Separator();
 
     if (t.mods.empty()) {
         ImGui::Spacing();
-        ImGui::TextDisabled("No mods installed. Put a mod's folder in the mods folder, or make one with New mod.");
-        ImGui::TextDisabled("port/MODDING.md explains how mods work.");
+        ImGui::TextDisabled("%s", tr("No mods installed. Put a mod's folder in the mods folder, or make one with New mod."));
+        ImGui::TextDisabled("%s", tr("port/MODDING.md explains how mods work."));
         return;
     }
 
     /* Left: the list in load order. Right: the selected mod. */
     ImGui::BeginChild("modlist", ImVec2(ImGui::GetContentRegionAvail().x * 0.42f, 0), true);
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Load order: when two mods change the same file, the lower one wins.");
+    ImGui::TextWrapped("%s", tr("Load order: when two mods change the same file, the lower one wins."));
     ImGui::PopStyleColor();
     for (size_t i = 0; i < t.mods.size(); i++) {
         ModInfo &m = t.mods[i];
@@ -286,7 +289,7 @@ void mods_tab_draw(Settings *s) {
         if (ImGui::Selectable(label.c_str(), t.selected == (int)i)) t.selected = (int)i;
         if (t.checked && (m.errors || m.warnings)) {
             ImGui::SameLine();
-            ImGui::TextColored(level_color(m.errors ? 2 : 1), m.errors ? "%d problem%s" : "%d note%s",
+            ImGui::TextColored(level_color(m.errors ? 2 : 1), m.errors ? tr("%d problem%s") : tr("%d note%s"),
                                m.errors ? m.errors : m.warnings, (m.errors ? m.errors : m.warnings) == 1 ? "" : "s");
         }
         ImGui::PopID();
@@ -297,7 +300,7 @@ void mods_tab_draw(Settings *s) {
     if (t.selected >= 0 && t.selected < (int)t.mods.size()) {
         const int i = t.selected;
         ImGui::BeginDisabled(i == 0);
-        if (ImGui::Button("Move up")) {
+        if (ImGui::Button(tr("Move up"))) {
             std::swap(t.mods[i], t.mods[i - 1]);
             t.selected = i - 1;
             save_order(s);
@@ -305,14 +308,14 @@ void mods_tab_draw(Settings *s) {
         ImGui::EndDisabled();
         ImGui::SameLine();
         ImGui::BeginDisabled(i + 1 >= (int)t.mods.size());
-        if (ImGui::Button("Move down")) {
+        if (ImGui::Button(tr("Move down"))) {
             std::swap(t.mods[i], t.mods[i + 1]);
             t.selected = i + 1;
             save_order(s);
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
-        if (ImGui::Button("Open folder")) open_folder(mods_dir() + "/" + t.mods[t.selected].folder);
+        if (ImGui::Button(tr("Open folder"))) open_folder(mods_dir() + "/" + t.mods[t.selected].folder);
         ImGui::Separator();
         if (t.selected < (int)t.mods.size()) draw_details(t.mods[t.selected]);
     }

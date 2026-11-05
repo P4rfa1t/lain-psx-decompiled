@@ -30,6 +30,7 @@
 #include "lain_xa.h"
 
 #include "discs.h"
+#include "i18n.h"
 #include "mods.h"
 #include "modrt.h"
 #include "hdtex.h"
@@ -925,6 +926,7 @@ int main(int argc, char **argv) {
     }
     Settings settings;
     settings_load(&settings);
+    i18n_set_language(settings.ui_lang);
 
     /* `lain --play`: skip the launcher and boot with the saved settings/discs. */
     int play = argc >= 2 && strcmp(argv[1], "--play") == 0;

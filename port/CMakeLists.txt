@@ -86,6 +86,7 @@ add_library(client STATIC
     client/iso.c client/psx_mem.c client/overlay.cpp client/packs.cpp client/sub_download.cpp client/unused_gallery.cpp client/app_icon.c
     client/tracks.c client/subtitles.c client/subtitle_kit.c client/dub.c client/dub_player.c
     client/mods.cpp client/mods_ui.cpp client/modrt.cpp client/moddata.cpp client/hdtex.cpp client/json.cpp client/napk.c client/png.c client/tim.c
+    client/i18n.c client/ui_font.cpp
     external/stb/stb_vorbis_impl.c)
 target_include_directories(client PUBLIC client game/include external/stb)
 target_link_libraries(client PUBLIC imgui tinyfd psx lua SDL2::SDL2)
