@@ -43,6 +43,11 @@ void discs_import_start(ImportJob *job, const char *path, const char *data_dir);
 /* Path of an imported disc (data_dir/discN.bin) if it exists; returns 1 if present. */
 int discs_imported(const char *data_dir, int disc, char *out, int cap);
 
+#ifdef __SWITCH__
+/* Links the disc images found under <data>/discs/ (or the data folder) in place. */
+int discs_auto_setup(const char *data_dir);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

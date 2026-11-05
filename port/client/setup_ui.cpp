@@ -20,6 +20,7 @@
 #include "app_icon.h"
 #include "i18n.h"
 #include "ui_font.h"
+#include "touch.h"
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl2.h"
@@ -309,6 +310,9 @@ extern "C" int setup_ui_run(Settings *s) {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             ImGui_ImplSDL2_ProcessEvent(&ev);
+            if (ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP) {
+                lain_touch_to_imgui(&ev, io.DisplaySize.x, io.DisplaySize.y);
+            }
             if (ev.type == SDL_QUIT) {
                 result = 0;
             } else if (ev.type == SDL_DROPFILE) {

@@ -1,0 +1,14 @@
+/* Maps SDL touch events to the mouse events Dear ImGui understands, so the
+ * launcher and the F1 menu can be used on the Switch's touch screen. */
+#pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+union SDL_Event;
+void lain_touch_to_imgui(const union SDL_Event *ev, float display_w, float display_h);
+
+#ifdef __cplusplus
+}
+#endif

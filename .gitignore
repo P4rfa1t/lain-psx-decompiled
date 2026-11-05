@@ -29,6 +29,9 @@ dist/
 # Locally staged subtitle/dub packs (port/tools/package_switch.sh bundles these)
 port/packs/
 
+# Bundled CJK font (downloaded while packaging; licenses stay in the repo)
+port/fonts/ui.ttf
+
 # objdiff-cli (tools/get_objdiff.sh)
 tools/bin/
 

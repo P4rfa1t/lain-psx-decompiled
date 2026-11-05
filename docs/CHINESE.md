@@ -107,9 +107,11 @@ ASCII**，由游戏自己的 4bpp 位图字体绘制：
 ## 4. Nintendo Switch
 
 - 构建产物：GitHub Actions 的 `switch client` 工作流生成 `Lain-switch.zip`。
-- 安装：把 `lain.nro` 放到 `sdmc:/switch/lain/`，从 Homebrew Menu 启动。
-- 光盘：把 `.cue`/`.bin`/`.img` 放到 `sdmc:/switch/lain/discs/`，在启动器按「添加光盘…」。
-- 中文界面字体：`sdmc:/switch/lain/fonts/ui.ttf`。
-- 字幕包：`sdmc:/switch/lain/lang/zh/`。
-
-> 注意：导入光盘会把整张镜像复制到数据目录（约 1.3 GB）。请确保 SD 卡有足够空间。
+- 安装：把压缩包里的 `Lain/` 内容整体复制到 `sdmc:/switch/lain/`，从 Homebrew Menu 启动。
+- 手柄：Joy-Con / Pro Controller 直接可用；启动器和 F1 菜单可用方向键 + A/B 导航。
+- 触摸：启动器和 F1 菜单支持 Switch 触摸屏点按。
+- 光盘：把 `.cue`/`.bin`/`.img` 放到 `sdmc:/switch/lain/discs/`。首次启动会校验并**原地读取**，
+  不复制镜像、也不需要手动导入；首次在启动器按一次「开始游戏」后，以后直接进入游戏。
+- 中文界面字体：压缩包自带 `fonts/ui.ttf`（文泉驿微米黑，Apache-2.0/GPLv3+字体例外），
+  解压后位于 `sdmc:/switch/lain/fonts/ui.ttf`，中文不会再显示为问号。
+- 字幕包：`lang/zh/` 已包含在整合包中，共 667 个节点。

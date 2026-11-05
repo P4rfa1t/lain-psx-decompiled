@@ -936,12 +936,28 @@ int main(int argc, char **argv) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
+    /* The launcher's ImGui backend and the game both read gamepads. Init here so
+     * the launcher can navigate with the pad; failure is not fatal (keyboard). */
+    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) == 0) {
+        SDL_GameControllerEventState(SDL_ENABLE);
+    }
     Settings settings;
     settings_load(&settings);
     i18n_set_language(settings.ui_lang);
+#ifdef __SWITCH__
+    /* Use disc images already on the SD card (no 1.3 GB copy, no import step). */
+    discs_auto_setup(settings_data_dir());
+#endif
 
     /* `lain --play`: skip the launcher and boot with the saved settings/discs. */
     int play = argc >= 2 && strcmp(argv[1], "--play") == 0;
+#ifdef __SWITCH__
+    /* After the first setup, boot straight into the game; F1 still opens the menu. */
+    if (!play && settings.setup_done) {
+        char tmp[1024];
+        play = discs_imported(settings_data_dir(), DISC_1, tmp, sizeof tmp);
+    }
+#endif
 
     /* The launcher is also where discs get imported. */
     if (!play && !setup_ui_run(&settings)) {

@@ -14,6 +14,7 @@
 #include "imgui_impl_sdl2.h"
 #include "i18n.h"
 #include "ui_font.h"
+#include "touch.h"
 #include "modrt.h"
 #include "mods.h"
 #include "packs.h"
@@ -132,6 +133,15 @@ extern "C" int overlay_handle_event(const union SDL_Event *ev) {
     const SDL_Event *e = (const SDL_Event *)ev;
     if (e->type == SDL_MOUSEMOTION) {
         s_mouse_moved_at = SDL_GetPerformanceCounter();
+    }
+    if (s_menu && s_ready &&
+        (e->type == SDL_FINGERDOWN || e->type == SDL_FINGERMOTION || e->type == SDL_FINGERUP)) {
+        if (e->type != SDL_FINGERUP) {
+            s_mouse_moved_at = SDL_GetPerformanceCounter();
+        }
+        ImGuiIO &io = ImGui::GetIO();
+        lain_touch_to_imgui(e, io.DisplaySize.x, io.DisplaySize.y);
+        return 1;
     }
     if (s_menu && s_rebind >= 0 && e->type == SDL_KEYDOWN && !e->key.repeat) {
         SDL_Scancode sc = e->key.keysym.scancode;

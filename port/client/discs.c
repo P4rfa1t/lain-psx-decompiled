@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __SWITCH__
+#include <dirent.h>
+#endif
 
 #include "sha1.h"
 
@@ -165,13 +168,24 @@ static int import_thread(void *p) {
         return 0;
     }
     snprintf(tmp, sizeof tmp, "%s/import.tmp", a->data_dir);
-    FILE *out = fopen(tmp, "wb");
-    if (!out) {
-        snprintf(job->message, sizeof job->message, "Can't write to %s", a->data_dir);
-        fclose(in);
-        job->state = IMPORT_FAILED;
-        free(a);
-        return 0;
+    /* On the Switch the SD card is the source: use the image in place instead
+     * of copying ~1.3 GB into the data folder. */
+    const int in_place =
+#ifdef __SWITCH__
+        1;
+#else
+        0;
+#endif
+    FILE *out = NULL;
+    if (!in_place) {
+        out = fopen(tmp, "wb");
+        if (!out) {
+            snprintf(job->message, sizeof job->message, "Can't write to %s", a->data_dir);
+            fclose(in);
+            job->state = IMPORT_FAILED;
+            free(a);
+            return 0;
+        }
     }
 
     Sha1 sha;
@@ -181,7 +195,7 @@ static int import_thread(void *p) {
     size_t n;
     while ((n = fread(buf, 1, COPY_CHUNK, in)) > 0) {
         sha1_update(&sha, buf, n);
-        if (fwrite(buf, 1, n, out) != n) {
+        if (!in_place && fwrite(buf, 1, n, out) != n) {
             snprintf(job->message, sizeof job->message, "Disk full while copying");
             break;
         }
@@ -190,9 +204,13 @@ static int import_thread(void *p) {
     }
     free(buf);
     fclose(in);
-    fclose(out);
+    if (out) {
+        fclose(out);
+    }
     if (done != total) {
-        remove(tmp);
+        if (out) {
+            remove(tmp);
+        }
         if (!job->message[0]) {
             snprintf(job->message, sizeof job->message, "Read error while copying");
         }
@@ -216,25 +234,45 @@ static int import_thread(void *p) {
         job->disc = discs_identify_by_contents(tmp);
     }
     if (job->disc == DISC_UNKNOWN) {
-        remove(tmp);
+        if (out) {
+            remove(tmp);
+        }
         snprintf(job->message, sizeof job->message, "This isn't a Serial Experiments Lain disc");
         job->state = IMPORT_FAILED;
         free(a);
         return 0;
     }
-    snprintf(dst, sizeof dst, "%sdisc%d.bin", a->data_dir, job->disc);
-    remove(dst);
-    if (rename(tmp, dst) != 0) {
-        remove(tmp);
-        snprintf(job->message, sizeof job->message, "Can't save %s", dst);
-        job->state = IMPORT_FAILED;
-        free(a);
-        return 0;
+    if (in_place) {
+        char link[1100];
+        snprintf(link, sizeof link, "%sdisc%d.link", a->data_dir, job->disc);
+        FILE *lf = fopen(link, "wb");
+        if (!lf) {
+            snprintf(job->message, sizeof job->message, "Can't write to %s", a->data_dir);
+            job->state = IMPORT_FAILED;
+            free(a);
+            return 0;
+        }
+        fwrite(bin, 1, strlen(bin), lf);
+        fclose(lf);
+        snprintf(job->message, sizeof job->message, job->verified
+                     ? "Disc %d found on the SD card (verified retail dump)"
+                     : "Disc %d found on the SD card (unverified dump: it may be modified or a different release)",
+                 job->disc);
+    } else {
+        snprintf(dst, sizeof dst, "%sdisc%d.bin", a->data_dir, job->disc);
+        remove(dst);
+        if (rename(tmp, dst) != 0) {
+            remove(tmp);
+            snprintf(job->message, sizeof job->message, "Can't save %s", dst);
+            job->state = IMPORT_FAILED;
+            free(a);
+            return 0;
+        }
+        snprintf(job->message, sizeof job->message, job->verified
+                     ? "Disc %d imported (verified retail dump)"
+                     : "Disc %d imported (unverified dump: it may be modified or a different release)",
+                 job->disc);
     }
-    snprintf(job->message, sizeof job->message, job->verified
-                 ? "Disc %d imported (verified retail dump)"
-                 : "Disc %d imported (unverified dump: it may be modified or a different release)",
-             job->disc);
     job->progress = 1.0f;
     job->state = IMPORT_DONE;
     free(a);
@@ -255,9 +293,63 @@ void discs_import_start(ImportJob *job, const char *path, const char *data_dir) 
 int discs_imported(const char *data_dir, int disc, char *out, int cap) {
     snprintf(out, cap, "%sdisc%d.bin", data_dir, disc);
     FILE *f = fopen(out, "rb");
+    if (f) {
+        fclose(f);
+        return 1;
+    }
+    /* The Switch keeps the player's image where it is; discN.link names it. */
+    snprintf(out, cap, "%sdisc%d.link", data_dir, disc);
+    f = fopen(out, "rb");
+    if (!f) {
+        return 0;
+    }
+    if (!fgets(out, cap, f)) {
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+    out[strcspn(out, "\r\n")] = 0;
+    f = fopen(out, "rb");
     if (!f) {
         return 0;
     }
     fclose(f);
     return 1;
 }
+
+#ifdef __SWITCH__
+/* First run: link the images already on the SD card (sdmc:/switch/lain/discs/
+ * or the data folder), so the player doesn't have to import them by hand. */
+int discs_auto_setup(const char *data_dir) {
+    char p[1024];
+    if (discs_imported(data_dir, DISC_1, p, sizeof p) &&
+        discs_imported(data_dir, DISC_2, p, sizeof p)) {
+        return 0;
+    }
+    char discs_dir[1024], root[1024];
+    snprintf(discs_dir, sizeof discs_dir, "%sdiscs", data_dir);
+    snprintf(root, sizeof root, "%s", data_dir);
+    const char *dirs[2] = {discs_dir, root};
+    for (int d = 0; d < 2; d++) {
+        DIR *dh = opendir(dirs[d]);
+        if (!dh) {
+            continue;
+        }
+        struct dirent *e;
+        while ((e = readdir(dh))) {
+            if (!ends_with_ci(e->d_name, ".cue") && !ends_with_ci(e->d_name, ".img")) {
+                continue;
+            }
+            char path[1200];
+            snprintf(path, sizeof path, "%s/%s", dirs[d], e->d_name);
+            ImportJob job;
+            discs_import_start(&job, path, data_dir);
+            while (job.state == IMPORT_RUNNING) {
+                SDL_Delay(100);
+            }
+        }
+        closedir(dh);
+    }
+    return 0;
+}
+#endif

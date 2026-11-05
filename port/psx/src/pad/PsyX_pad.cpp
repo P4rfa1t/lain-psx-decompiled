@@ -28,6 +28,7 @@ const u_char*			g_sdlKeyboardState = NULL;
 
 u_short PsyX_Pad_UpdateKeyboardInput();
 void	PsyX_Pad_UpdateGameControllerInput(SDL_GameController* cont, LPPADRAW pad);
+void	PsyX_Pad_Event_ControllerAdded(Sint32 deviceId);
 
 // Initializes SDL controllers
 int PsyX_Pad_InitSystem()
@@ -51,6 +52,15 @@ int PsyX_Pad_InitSystem()
 
 	// Add more controllers from custom file
 	SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt");
+	SDL_GameControllerEventState(SDL_ENABLE);
+
+	/* The Switch has no hotplug: its pads exist from boot, and some SDL ports
+	 * don't deliver CONTROLLERDEVICEADDED for them. Open what is present. */
+	for (int i = 0, n = SDL_NumJoysticks(); i < n; i++)
+	{
+		if (SDL_IsGameController(i))
+			PsyX_Pad_Event_ControllerAdded(i);
+	}
 
 	return 1;
 }
