@@ -12,7 +12,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
 </p>
 
-<p align="center">English | <a href="README.ja.md">日本語</a></p>
+<p align="center">English | <a href="README.ja.md">日本語</a> | <a href="docs/CHINESE.md">简体中文</a></p>
+
+> **中文支持：** 启动器与 F1 菜单可在「界面语言」中切换简体中文；语音/影片可加载
+> `lang/zh/` 中文字幕包。Nintendo Switch 版由 GitHub Actions 构建为 `lain.nro`。
+> 详见 [docs/CHINESE.md](docs/CHINESE.md)。
 
 This is a **decompilation** of ***Serial Experiments Lain*** (PlayStation, Pioneer LDC, 1998)
 and a **native client** for Windows, macOS and Linux built from it.
