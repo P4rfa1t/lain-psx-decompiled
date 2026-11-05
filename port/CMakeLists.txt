@@ -95,6 +95,23 @@ target_link_libraries(client PUBLIC imgui tinyfd psx lua SDL2::SDL2)
 # compiled from copies in which every game function can be replaced at run time
 # by mods (tools/gen_hooks.py; game/*.c is unchanged).
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+# The client fonts and language packs are linked into the executable as one
+# blob and written to the data folder on first run, so the release is a single
+# file. Regenerated when a font or pack changes (CONFIGURE_DEPENDS re-globs).
+file(GLOB_RECURSE LAIN_ASSET_FILES CONFIGURE_DEPENDS fonts/* packs/*)
+set(LAIN_ASSETS_BIN ${CMAKE_CURRENT_BINARY_DIR}/lain_assets.bin)
+set(LAIN_ASSETS_ASM ${CMAKE_CURRENT_BINARY_DIR}/lain_assets.S)
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/pack_assets.py"
+            "${LAIN_ASSETS_BIN}" "${LAIN_ASSETS_ASM}" "${CMAKE_CURRENT_SOURCE_DIR}"
+    RESULT_VARIABLE LAIN_ASSETS_RESULT)
+if(NOT LAIN_ASSETS_RESULT EQUAL 0)
+    message(FATAL_ERROR "tools/pack_assets.py failed")
+endif()
+set_source_files_properties(${LAIN_ASSETS_ASM} PROPERTIES LANGUAGE ASM)
+target_sources(client PRIVATE client/embedded_assets.c ${LAIN_ASSETS_ASM})
+
 file(GLOB GAME_SRCS CONFIGURE_DEPENDS game/*.c)
 set(HOOKS_DIR ${CMAKE_CURRENT_BINARY_DIR}/hooks)
 set(GAME_HOOKED_SRCS ${HOOKS_DIR}/game_hooks.c)

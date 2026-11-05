@@ -31,6 +31,7 @@
 
 #include "discs.h"
 #include "i18n.h"
+#include "embedded_assets.h"
 #include "mods.h"
 #include "modrt.h"
 #include "hdtex.h"
@@ -923,6 +924,14 @@ int main(int argc, char **argv) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
+    }
+    /* The fonts and language packs are linked into the executable; write them
+     * to the data folder once so the pack/font lookup finds them. */
+    {
+        int n = lain_assets_extract();
+        if (n > 0) {
+            fprintf(stderr, "lain: wrote %d built-in language files\n", n);
+        }
     }
     Settings settings;
     settings_load(&settings);

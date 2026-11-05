@@ -61,9 +61,10 @@ lain --make-subtitle-pack zh 简体中文
 laingame.net 的英文粉丝字幕（该字幕属于其作者，授权说明见 `port/packs/zh/README.txt`）。
 `port/tools/package_switch.sh` 会把它打进 `Lain/lang/zh/`，所以 Switch 发行包开箱即用。
 
-桌面端使用时，把 `port/packs/zh/` 复制到数据目录的 `lang/` 下（得到 `lang/zh/`），
-再在启动器或 F1 菜单里选择「简体中文」。SRT/ASS 可以继续用 Subtitle Edit、Aegisub
-修改；文件名保持不变就会按节点匹配。
+桌面端不需要手动放文件：字体（`fonts/ui.ttf`）和 `lang/zh/` 语言包在构建时打进
+可执行文件，第一次启动会写入数据目录，随后在启动器或 F1 菜单里直接选择
+「简体中文」即可。写入后的文件可以随意编辑——SRT/ASS 用 Subtitle Edit、Aegisub
+修改，文件名保持不变就会按节点匹配；标记文件存在后不会再覆盖它们。
 
 ### 双语字幕
 
