@@ -18,6 +18,12 @@
 extern const unsigned char lain_assets_blob[];
 extern const unsigned char lain_assets_blob_end[];
 
+enum {
+    EXTRACT_ALL,
+    EXTRACT_CORE, /* fonts/, the launcher artwork, and only the pack names */
+    EXTRACT_LANG  /* one subtitle pack */
+};
+
 static unsigned read_u32(const unsigned char **p)
 {
     const unsigned char *b = *p;
@@ -82,7 +88,32 @@ static unsigned fnv1a(unsigned h, const unsigned char *p, size_t n)
     return h;
 }
 
-int lain_assets_extract(void)
+static int wants(const char *rel, int mode, const char *code)
+{
+    if (mode == EXTRACT_ALL)
+        return 1;
+    if (mode == EXTRACT_CORE)
+    {
+        if (strncmp(rel, "fonts/", 6) == 0)
+            return 1;
+        if (strcmp(rel, "lain_logo.rgba") == 0)
+            return 1;
+        /* Just the label, so the language pickers can list the packs. */
+        {
+            const size_t n = strlen(rel);
+            return strncmp(rel, "lang/", 5) == 0 && n > 9 && strcmp(rel + n - 9, "/pack.txt") == 0;
+        }
+    }
+    if (!code || !*code)
+        return 0;
+    {
+        char prefix[96];
+        snprintf(prefix, sizeof prefix, "lang/%s/", code);
+        return strncmp(rel, prefix, strlen(prefix)) == 0;
+    }
+}
+
+static int extract(int mode, const char *code)
 {
     const unsigned char *p = lain_assets_blob;
     const unsigned char *end = lain_assets_blob_end;
@@ -92,19 +123,23 @@ int lain_assets_extract(void)
     unsigned count;
     int written = 0;
     int failed = 0;
+    unsigned h = 2166136261u;
 
     if (total < 12 || memcmp(p, "LAINAS01", 8) != 0)
         return 0;
 
-    /* One marker per asset build: same executable, nothing to do. */
-    {
-        unsigned h = 2166136261u;
-        h = fnv1a(h, (const unsigned char *)&total, sizeof total);
-        h = fnv1a(h, p, total < 4096 ? total : 4096);
-        if (total > 4096)
-            h = fnv1a(h, end - 4096, 4096);
+    /* One marker per extraction of this asset build. */
+    h = fnv1a(h, (const unsigned char *)&total, sizeof total);
+    h = fnv1a(h, p, total < 4096 ? total : 4096);
+    if (total > 4096)
+        h = fnv1a(h, end - 4096, 4096);
+    if (mode == EXTRACT_CORE)
+        snprintf(marker, sizeof marker, "%s.assets-core-%08x", settings_data_dir(), h);
+    else if (mode == EXTRACT_LANG)
+        snprintf(marker, sizeof marker, "%s.assets-lang-%s-%08x", settings_data_dir(), code, h);
+    else
         snprintf(marker, sizeof marker, "%s.assets-%08x", settings_data_dir(), h);
-    }
+
     m = fopen(marker, "rb");
     if (m)
     {
@@ -132,17 +167,22 @@ int lain_assets_extract(void)
         size = read_u32(&p);
         if (size > (size_t)(end - p))
             break;
-        snprintf(path, sizeof path, "%s%s", settings_data_dir(), rel);
-        make_dirs(path);
-        if (!file_size_matches(path, size)) {
-            if (write_file(path, p, size))
-                written++;
-            else
-                failed++;
+        if (wants(rel, mode, code))
+        {
+            snprintf(path, sizeof path, "%s%s", settings_data_dir(), rel);
+            make_dirs(path);
+            if (!file_size_matches(path, size))
+            {
+                if (write_file(path, p, size))
+                    written++;
+                else
+                    failed++;
+            }
         }
         p += size;
     }
 
+    /* Only mark it done when nothing failed, so a full SD card can be retried. */
     if (failed == 0)
     {
         m = fopen(marker, "wb");
@@ -153,4 +193,19 @@ int lain_assets_extract(void)
         }
     }
     return written;
+}
+
+int lain_assets_extract_core(void)
+{
+    return extract(EXTRACT_CORE, NULL);
+}
+
+int lain_assets_extract_lang(const char *code)
+{
+    return extract(EXTRACT_LANG, code);
+}
+
+int lain_assets_extract(void)
+{
+    return extract(EXTRACT_ALL, NULL);
 }

@@ -462,12 +462,12 @@ extern "C" int setup_ui_run(Settings *s, SetupPreloadFn preload) {
 #endif
 #ifdef __SWITCH__
         const bool setup_tab = true;
-        ImGui::BeginChild("setup_page", ImVec2(0, -footer));
+        ImGui::BeginChild("setup_page", ImVec2(0, -footer), ImGuiChildFlags_NavFlattened);
 #else
         ImGui::BeginTabBar("launcher");
         const bool setup_tab = ImGui::BeginTabItem(tr("Setup"));
         if (setup_tab) {
-            ImGui::BeginChild("setup_page", ImVec2(0, -footer));
+            ImGui::BeginChild("setup_page", ImVec2(0, -footer), ImGuiChildFlags_NavFlattened);
         }
 #endif
         if (setup_tab) {

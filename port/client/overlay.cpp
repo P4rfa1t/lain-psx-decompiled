@@ -18,6 +18,7 @@
 #include "modrt.h"
 #include "mods.h"
 #include "packs.h"
+#include "embedded_assets.h"
 
 #include <string>
 #include <utility>
@@ -304,10 +305,12 @@ static void draw_menu(const ImGuiViewport *vp) {
                 }
             }
             if (pack_combo(tr("Text / subtitles"), s_text_packs, s->text_lang, sizeof s->text_lang)) {
+                lain_assets_extract_lang(s->text_lang); /* built-in packs are unpacked on demand */
                 apply |= OVERLAY_APPLY_TEXT;
             }
             note_focus("Text / subtitles");
             if (pack_combo(tr("Voices"), s_voice_packs, s->voice_lang, sizeof s->voice_lang)) {
+                lain_assets_extract_lang(s->voice_lang);
                 apply |= OVERLAY_APPLY_VOICE;
             }
             note_focus("Voices");

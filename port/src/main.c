@@ -822,6 +822,12 @@ static int preload_game(Settings *initial, const char *disc1, const char *disc2)
     live_settings = *initial;
     const Settings *settings = &live_settings;
     char err[256];
+    /* Subtitle tables are written here, not at start-up: the launcher shows a
+     * loading message while this runs. The pack names were already written. */
+    lain_assets_extract_lang(settings->text_lang);
+    if (strcmp(settings->voice_lang, "ja") != 0) {
+        lain_assets_extract_lang(settings->voice_lang);
+    }
     if (psx_mem_load(disc1, err, sizeof err) != 0) {
         fprintf(stderr, "lain: %s\n", err);
         return 1;
@@ -1016,7 +1022,7 @@ int main(int argc, char **argv) {
     /* Fonts, language packs and the launcher artwork are linked into the NRO;
      * write them to the SD card once so the normal lookups find them. */
     {
-        int n = lain_assets_extract();
+        int n = lain_assets_extract_core();
         if (n > 0) {
             lain_log("assets: wrote %d built-in files", n);
         }
