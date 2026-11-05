@@ -934,8 +934,23 @@ int main(int argc, char **argv) {
         }
     }
     Settings settings;
-    settings_load(&settings);
-    i18n_set_language(settings.ui_lang);
+    {
+        /* First launch: subtitles follow the same rule as the interface -
+         * Chinese system gets Chinese, anything else English. */
+        char ini[1100];
+        snprintf(ini, sizeof ini, "%ssettings.ini", settings_data_dir());
+        FILE *probe = fopen(ini, "rb");
+        const int fresh = probe == NULL;
+        if (probe) {
+            fclose(probe);
+        }
+        settings_load(&settings);
+        i18n_set_language(settings.ui_lang);
+        const int untouched = settings.setup_done == 0 && strcmp(settings.text_lang, "ja") == 0;
+        if (fresh || untouched) {
+            snprintf(settings.text_lang, sizeof settings.text_lang, "%s", i18n_language());
+        }
+    }
 
     /* `lain --play`: skip the launcher and boot with the saved settings/discs. */
     int play = argc >= 2 && strcmp(argv[1], "--play") == 0;
