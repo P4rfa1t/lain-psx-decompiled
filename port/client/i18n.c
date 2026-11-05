@@ -3,6 +3,10 @@
 #include <SDL.h>
 #include <string.h>
 
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
+
 typedef struct {
     const char *en;
     const char *zh;
@@ -232,9 +236,18 @@ static int s_zh;
 
 void i18n_set_language(const char *code) {
     if (!code || !*code || SDL_strcasecmp(code, "auto") == 0) {
-        /* This fork defaults to Chinese when the system locale is unknown
-         * (common on the Switch). */
-        s_zh = 1;
+#ifdef __SWITCH__
+        /* SDL often reports no locale on the console; ask the system itself.
+         * Chinese systems get Chinese, every other language gets English. */
+        u64 lang = 0;
+        if (R_SUCCEEDED(setGetSystemLanguage(&lang))) {
+            s_zh = lang == SetLanguage_ZHCN || lang == SetLanguage_ZHTW ||
+                   lang == SetLanguage_ZHHANS || lang == SetLanguage_ZHHANT;
+        } else {
+            s_zh = 0;
+        }
+#else
+        s_zh = 0;
         SDL_Locale *loc = SDL_GetPreferredLocales();
         if (loc && loc[0].language) {
             s_zh = SDL_strcasecmp(loc[0].language, "zh") == 0;
@@ -242,6 +255,7 @@ void i18n_set_language(const char *code) {
         if (loc) {
             SDL_free(loc);
         }
+#endif
         return;
     }
     s_zh = SDL_strcasecmp(code, "zh") == 0;
