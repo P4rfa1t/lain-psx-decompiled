@@ -38,6 +38,13 @@ docker run --rm \
     fi
     cp /lic/LICENSE /tmp/pkg/Lain/LICENSE.txt
     cp -R /lic/thirdparty /tmp/pkg/Lain/thirdparty
+    # Optional subtitle/dub packs staged in port/packs/<code>/ (gitignored, so
+    # no third-party translation enters the repository or CI artifacts).
+    if [ -d /src/packs ]; then
+      mkdir -p /tmp/pkg/Lain/lang
+      cp -R /src/packs/. /tmp/pkg/Lain/lang/
+      printf "\nSubtitle packs are included under lang/.\n" >> /tmp/pkg/Lain/README.txt
+    fi
     cat > /tmp/pkg/Lain/README.txt <<EOF
 Serial Experiments Lain (Nintendo Switch)
 

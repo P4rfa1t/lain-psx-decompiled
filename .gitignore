@@ -26,6 +26,9 @@ port/build/
 # Packaged builds
 dist/
 
+# Locally staged subtitle/dub packs (port/tools/package_switch.sh bundles these)
+port/packs/
+
 # objdiff-cli (tools/get_objdiff.sh)
 tools/bin/
 

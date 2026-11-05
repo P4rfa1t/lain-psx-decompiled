@@ -62,6 +62,9 @@ laingame.net 的英文粉丝字幕（该字幕属于其作者，不在本仓库�
 下，得到 `lang/zh/`，然后在启动器或 F1 菜单里选择「简体中文」即可。语言包的 SRT/ASS
 文件可以继续用 Subtitle Edit、Aegisub 等工具修改；名字保持不变就会按节点匹配。
 
+本地构建 Switch 版时，把语言包放到 `port/packs/zh/`（该目录被 `.gitignore` 忽略，不会提交），
+再运行 `port/tools/package_switch.sh`，生成的 `Lain-switch.zip` 会带上 `Lain/lang/zh/`。
+
 ### 双语字幕
 
 一个字幕条目里放两行即可：
