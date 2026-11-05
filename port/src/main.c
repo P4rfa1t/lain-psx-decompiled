@@ -814,7 +814,11 @@ static void apply_menu_change(int what) {
 }
 
 /* Loads the EXE image into the arena, opens the game window and runs the game. */
-static int boot_game(const Settings *initial, const char *disc1, const char *disc2) {
+static int g_game_preloaded;
+
+/* Everything that reads the discs, done while the launcher can still show a
+ * "loading" screen. boot_game() picks the state up from here. */
+static int preload_game(Settings *initial, const char *disc1, const char *disc2) {
     live_settings = *initial;
     const Settings *settings = &live_settings;
     char err[256];
@@ -836,6 +840,15 @@ static int boot_game(const Settings *initial, const char *disc1, const char *dis
     modrt_start(settings->mods);
     /* HD texture packs, and the texture dump for making them (client/hdtex.cpp). */
     hdtex_start(settings->mods, getenv("LAIN_DUMP_TEXTURES") ? atoi(getenv("LAIN_DUMP_TEXTURES")) : settings->dump_textures);
+    g_game_preloaded = 1;
+    return 0;
+}
+
+static int boot_game(const Settings *initial, const char *disc1, const char *disc2) {
+    if (!g_game_preloaded && preload_game((Settings *)initial, disc1, disc2) != 0) {
+        return 1;
+    }
+    const Settings *settings = &live_settings;
     /* Internal resolution: 320x240 times render_scale, scaled to the window;
      * 0 renders at the window's own (HiDPI) resolution. LAIN_RENDER_SCALE (tests)
      * overrides it without saving to settings.ini. */
@@ -1015,19 +1028,22 @@ int main(int argc, char **argv) {
              settings.width, settings.height, settings.fullscreen ? "fullscreen" : "windowed",
              settings.render_scale, settings.vsync, settings.smooth, settings.ui_lang,
              settings.text_lang, settings.voice_lang);
-#ifdef __SWITCH__
-    /* Use disc images already on the SD card (no 1.3 GB copy, no import step). */
-    discs_auto_setup(settings_data_dir());
-    lain_log("disc scan done");
-#endif
-
     /* `lain --play`: skip the launcher and boot with the saved settings/discs. */
     int play = argc >= 2 && strcmp(argv[1], "--play") == 0;
+
+#ifdef __SWITCH__
+    /* Only when there is no launcher: the launcher scans on Play, so start-up
+     * shows its window immediately instead of reading the SD card first. */
+    if (play) {
+        discs_auto_setup(settings_data_dir());
+        lain_log("disc scan done");
+    }
+#endif
 
     /* The launcher is also where discs get imported. */
     if (!play) {
         lain_log("launcher start");
-        int ok = setup_ui_run(&settings);
+        int ok = setup_ui_run(&settings, preload_game);
         lain_log("launcher result %d", ok);
         if (!ok) {
             SDL_Quit();

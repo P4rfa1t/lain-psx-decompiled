@@ -253,7 +253,37 @@ static GLuint load_logo_texture(void) {
 }
 #endif
 
-extern "C" int setup_ui_run(Settings *s) {
+/* One centered line while the slow part runs; no input is needed there. */
+static void draw_loading_screen(SDL_Window *win, const char *msg) {
+    ImGuiIO &io = ImGui::GetIO();
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(io.DisplaySize);
+    ImGui::Begin("loading", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+    ImGui::PushFont(nullptr, 36.0f);
+    const ImVec2 ts = ImGui::CalcTextSize(msg);
+    ImGui::SetCursorPos(ImVec2((io.DisplaySize.x - ts.x) * 0.5f, io.DisplaySize.y * 0.45f));
+    ImGui::TextUnformatted(msg);
+    ImGui::PopFont();
+    ImGui::End();
+    ImGui::Render();
+    int fbw = 0, fbh = 0;
+    SDL_GL_GetDrawableSize(win, &fbw, &fbh);
+    glViewport(0, 0, fbw, fbh);
+#if defined(__SWITCH__)
+    glClearColor(1.0f, 1.0f, 1.0f, 1);
+#else
+    glClearColor(0.05f, 0.05f, 0.07f, 1);
+#endif
+    glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    SDL_GL_SwapWindow(win);
+}
+
+extern "C" int setup_ui_run(Settings *s, SetupPreloadFn preload) {
 #ifdef __SWITCH__
     /* No display controls on the console: fullscreen, 2x internal resolution. */
     s->fullscreen = 1;
@@ -514,7 +544,9 @@ extern "C" int setup_ui_run(Settings *s) {
 #endif
 
         // Language
+#ifndef __SWITCH__
         ImGui::SeparatorText(tr("Language"));
+#endif
 #ifdef __SWITCH__
         {
             /* One card per setting: label left, value right. Tap the card or
@@ -730,7 +762,7 @@ extern "C" int setup_ui_run(Settings *s) {
                 lain_log("launcher: play (text %s, voice %s)", s->text_lang, s->voice_lang);
                 s->setup_done = 1;
                 settings_save(s);
-                result = 1;
+                result = 2; /* the game data is read below, still on screen */
             }
         }
 #ifdef __SWITCH__
@@ -790,6 +822,21 @@ extern "C" int setup_ui_run(Settings *s) {
             result = 0;
         }
         SDL_GL_SwapWindow(win);
+    }
+
+    if (result == 2) {
+        /* Read the game data from the disc while the launcher can still show a
+         * message; the black screen then only covers the game window start. */
+        char d1[1024], d2[1024];
+        const int have1 = discs_imported(settings_data_dir(), DISC_1, d1, sizeof d1);
+        const int have2 = discs_imported(settings_data_dir(), DISC_2, d2, sizeof d2);
+        int ok = 1;
+        if (have1 && preload) {
+            draw_loading_screen(win, tr("Loading the game..."));
+            ok = preload(s, d1, have2 ? d2 : NULL);
+            lain_log("launcher: preload %s", ok == 0 ? "ok" : "failed");
+        }
+        result = ok == 0 ? 1 : 0;
     }
 
     settings_save(s);

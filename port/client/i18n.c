@@ -74,6 +74,7 @@ static const Entry kEntries[] = {
     {"Add subtitle folder...", "添加字幕文件夹…"},
     {"Folder with .ass or .srt subtitle files", "包含 .ass 或 .srt 字幕文件的文件夹"},
     {"Working...", "处理中…"},
+    {"Loading the game...", "正在载入游戏…"},
     {"Packs live in: %slang", "语言包位于：%slang"},
     {"Mods", "模组"},
     {"Unused", "未使用内容"},
