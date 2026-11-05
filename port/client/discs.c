@@ -318,8 +318,20 @@ int discs_imported(const char *data_dir, int disc, char *out, int cap) {
 }
 
 #ifdef __SWITCH__
+static void write_link(const char *data_dir, int disc, const char *path) {
+    char link[1100];
+    snprintf(link, sizeof link, "%sdisc%d.link", data_dir, disc);
+    FILE *f = fopen(link, "wb");
+    if (f) {
+        fwrite(path, 1, strlen(path), f);
+        fclose(f);
+    }
+}
+
 /* First run: link the images already on the SD card (sdmc:/switch/lain/discs/
- * or the data folder), so the player doesn't have to import them by hand. */
+ * or the data folder), so the player doesn't have to import them by hand.
+ * Identification reads a few sectors; the full SHA-1 is only checked when the
+ * image can't be identified, so startup is not blocked for minutes. */
 int discs_auto_setup(const char *data_dir) {
     char p[1024];
     if (discs_imported(data_dir, DISC_1, p, sizeof p) &&
@@ -342,6 +354,14 @@ int discs_auto_setup(const char *data_dir) {
             }
             char path[1200];
             snprintf(path, sizeof path, "%s/%s", dirs[d], e->d_name);
+            char bin[1024], err[128];
+            if (discs_resolve_track(path, bin, sizeof bin, err, sizeof err) == 0) {
+                int disc = discs_identify_by_contents(bin);
+                if (disc == DISC_1 || disc == DISC_2) {
+                    write_link(data_dir, disc, bin);
+                    continue;
+                }
+            }
             ImportJob job;
             discs_import_start(&job, path, data_dir);
             while (job.state == IMPORT_RUNNING) {

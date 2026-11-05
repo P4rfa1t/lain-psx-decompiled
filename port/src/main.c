@@ -9,6 +9,9 @@
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
+#ifdef __SWITCH__
+#include <sys/stat.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -797,6 +800,7 @@ static int boot_game(const Settings *initial, const char *disc1, const char *dis
         fprintf(stderr, "lain: %s\n", err);
         return 1;
     }
+    fprintf(stderr, "lain: arena loaded\n");
     int bad = port_data_relocate();
     if (bad != 0) {
         fprintf(stderr, "lain: %d pointer words outside PS1 RAM\n", bad);
@@ -812,8 +816,10 @@ static int boot_game(const Settings *initial, const char *disc1, const char *dis
      * 0 renders at the window's own (HiDPI) resolution. LAIN_RENDER_SCALE (tests)
      * overrides it without saving to settings.ini. */
     g_cfg_renderScale = getenv("LAIN_RENDER_SCALE") ? atoi(getenv("LAIN_RENDER_SCALE")) : settings->render_scale;
+    fprintf(stderr, "lain: opening game window\n");
     PsyX_Initialise("Serial Experiments Lain", settings->width, settings->height,
                     settings->fullscreen);
+    fprintf(stderr, "lain: game window = %p\n", (void *)SDL_GL_GetCurrentWindow());
     if (!SDL_GL_GetCurrentWindow()) {
 #if defined(__SWITCH__)
         char msg[512];
@@ -876,11 +882,28 @@ static int boot_game(const Settings *initial, const char *disc1, const char *dis
     atexit(modrt_quit);
     /* Stop the CD drive thread before the process tears down (it runs game callbacks). */
     atexit(LainCD_Shutdown);
+    fprintf(stderr, "lain: starting game\n");
     lain_game_main(); /* never returns */
     return 0;
 }
 
+#ifdef __SWITCH__
+/* The console has no console: keep a log on the SD card for black-screen reports. */
+static void switch_log_init(void) {
+    mkdir("sdmc:/switch", 0777);
+    mkdir("sdmc:/switch/lain", 0777);
+    freopen("sdmc:/switch/lain/lain.log", "w", stdout);
+    freopen("sdmc:/switch/lain/lain.log", "a", stderr);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+}
+#endif
+
 int main(int argc, char **argv) {
+#ifdef __SWITCH__
+    switch_log_init();
+    fprintf(stderr, "lain: main start\n");
+#endif
     /* `lain --make-subtitle-pack <code> [name]`: template SRT files for translators. */
     if (argc >= 3 && strcmp(argv[1], "--make-subtitle-pack") == 0) {
         char d1[1024], d2[1024], dir[1100], base[1100];
@@ -947,22 +970,21 @@ int main(int argc, char **argv) {
 #ifdef __SWITCH__
     /* Use disc images already on the SD card (no 1.3 GB copy, no import step). */
     discs_auto_setup(settings_data_dir());
+    fprintf(stderr, "lain: disc setup done\n");
 #endif
 
     /* `lain --play`: skip the launcher and boot with the saved settings/discs. */
     int play = argc >= 2 && strcmp(argv[1], "--play") == 0;
-#ifdef __SWITCH__
-    /* After the first setup, boot straight into the game; F1 still opens the menu. */
-    if (!play && settings.setup_done) {
-        char tmp[1024];
-        play = discs_imported(settings_data_dir(), DISC_1, tmp, sizeof tmp);
-    }
-#endif
 
     /* The launcher is also where discs get imported. */
-    if (!play && !setup_ui_run(&settings)) {
-        SDL_Quit();
-        return 0;
+    if (!play) {
+        fprintf(stderr, "lain: launcher start\n");
+        int ok = setup_ui_run(&settings);
+        fprintf(stderr, "lain: launcher result %d\n", ok);
+        if (!ok) {
+            SDL_Quit();
+            return 0;
+        }
     }
 
     char disc1[1024], disc2[1024];
