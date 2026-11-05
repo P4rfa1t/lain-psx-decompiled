@@ -11,6 +11,7 @@
 #include "psx/libspu.h"
 
 #include <SDL.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -20,6 +21,11 @@ LSpuState g_lspu;
 static SDL_mutex *s_lock;
 static SDL_mutex *s_cd_lock;
 static SDL_AudioDeviceID s_dev;
+/* The Switch audout backend runs at 48 kHz; convert from the SPU's 44.1 kHz. */
+static SDL_AudioStream *s_conv;
+static int s_dev_rate;
+static short *s_mix;
+static int s_mix_frames;
 static int s_output_enabled = 1;
 static float s_gain = 1.0f;
 
@@ -737,7 +743,26 @@ void LainSpu_SetOutputEnabled(int on)
 static void SDLCALL audio_cb(void *user, Uint8 *stream, int len)
 {
     (void)user;
-    LainSpu_Render((short *)stream, len / 4);
+    if (!s_conv || !s_mix) {
+        LainSpu_Render((short *)stream, len / 4);
+        return;
+    }
+    int out_frames = len / 4;
+    long long need = ((long long)out_frames * LSPU_RATE + s_dev_rate - 1) / s_dev_rate + 8;
+    if (need > s_mix_frames)
+        need = s_mix_frames;
+    LainSpu_Render(s_mix, (int)need);
+    SDL_AudioStreamPut(s_conv, s_mix, (int)need * 4);
+    int got = 0;
+    while (got < len) {
+        int n = SDL_AudioStreamGet(s_conv, stream + got, len - got);
+        if (n <= 0)
+            break;
+        got += n;
+    }
+    if (got < len) {
+        memset(stream + got, 0, (size_t)(len - got));
+    }
 }
 
 void LSpu_OpenOutput(void)
@@ -758,9 +783,20 @@ void LSpu_OpenOutput(void)
     want.channels = 2;
     want.samples = 512;
     want.callback = audio_cb;
-    s_dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+    s_dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
     if (!s_dev) {
         fprintf(stderr, "lain_snd: no audio device: %s\n", SDL_GetError());
+        return;
+    }
+    s_dev_rate = have.freq > 0 ? have.freq : LSPU_RATE;
+    if (s_dev_rate != LSPU_RATE) {
+        s_conv = SDL_NewAudioStream(AUDIO_S16SYS, 2, LSPU_RATE, AUDIO_S16SYS, 2, s_dev_rate);
+    }
+    s_mix_frames = (have.samples > 0 ? have.samples : 512) + 128;
+    s_mix = (short *)malloc((size_t)s_mix_frames * 4);
+    if (!s_mix) {
+        SDL_CloseAudioDevice(s_dev);
+        s_dev = 0;
         return;
     }
     SDL_PauseAudioDevice(s_dev, 0);
@@ -772,4 +808,11 @@ void LSpu_CloseOutput(void)
         SDL_CloseAudioDevice(s_dev);
         s_dev = 0;
     }
+    if (s_conv) {
+        SDL_FreeAudioStream(s_conv);
+        s_conv = NULL;
+    }
+    free(s_mix);
+    s_mix = NULL;
+    s_mix_frames = 0;
 }

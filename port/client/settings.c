@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __SWITCH__
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
 
 const char *settings_data_dir(void) {
     static char *dir;
@@ -18,6 +22,15 @@ const char *settings_data_dir(void) {
             dir[n + 1] = 0;
         }
     }
+#ifdef __SWITCH__
+    if (!dir) {
+        /* The SDL Switch port is built without a filesystem layer, so
+         * SDL_GetPrefPath returns NULL. Keep everything on the SD card. */
+        mkdir("sdmc:/switch", 0777);
+        mkdir("sdmc:/switch/lain", 0777);
+        dir = SDL_strdup("sdmc:/switch/lain/");
+    }
+#endif
     if (!dir) {
         /* %APPDATA%\LainNative\lain-native\, ~/Library/Application Support/LainNative/lain-native/, ... */
         dir = SDL_GetPrefPath("LainNative", "lain-native");
@@ -53,6 +66,7 @@ void settings_defaults(Settings *s) {
     s->volume = 100;
     strcpy(s->text_lang, "ja");
     strcpy(s->voice_lang, "ja");
+    strcpy(s->ui_lang, "auto");
     for (int i = 0; i < SETTINGS_NUM_KEYS; i++) {
         snprintf(s->keys[i], sizeof s->keys[i], "%s", DEFAULT_KEYS[i]);
     }
@@ -87,6 +101,7 @@ void settings_load(Settings *s) {
         else if (!strcmp(key, "cheat_genome")) s->cheat_genome = atoi(val);
         else if (!strcmp(key, "text_lang")) snprintf(s->text_lang, sizeof s->text_lang, "%s", val);
         else if (!strcmp(key, "voice_lang")) snprintf(s->voice_lang, sizeof s->voice_lang, "%s", val);
+        else if (!strcmp(key, "ui_lang")) snprintf(s->ui_lang, sizeof s->ui_lang, "%s", val);
         else if (!strcmp(key, "setup_done")) s->setup_done = atoi(val);
         else if (!strcmp(key, "mods")) snprintf(s->mods, sizeof s->mods, "%s", val);
         else if (!strcmp(key, "dump_textures")) s->dump_textures = atoi(val);
@@ -119,8 +134,8 @@ void settings_save(const Settings *s) {
             s->fullscreen, s->width, s->height, s->render_scale, s->vsync, s->smooth, s->volume);
     fprintf(f, "; cheats\ncheat_open_nodes = %d\nturbo = %d\ncheat_genome = %d\n", s->cheat_open_nodes, s->turbo,
             s->cheat_genome);
-    fprintf(f, "text_lang = %s\nvoice_lang = %s\nsetup_done = %d\n", s->text_lang, s->voice_lang,
-            s->setup_done);
+    fprintf(f, "text_lang = %s\nvoice_lang = %s\nui_lang = %s\nsetup_done = %d\n", s->text_lang, s->voice_lang,
+            s->ui_lang, s->setup_done);
     fprintf(f, "; mods in load order: +on / -off\nmods = %s\ndump_textures = %d\n", s->mods, s->dump_textures);
     fprintf(f, "; keyboard: SDL key names\n");
     for (int i = 0; i < SETTINGS_NUM_KEYS; i++) {

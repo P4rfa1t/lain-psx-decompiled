@@ -12,6 +12,8 @@
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl2.h"
+#include "i18n.h"
+#include "ui_font.h"
 #include "modrt.h"
 #include "mods.h"
 #include "packs.h"
@@ -57,8 +59,12 @@ static bool overlay_init(void) {
     ImGui::StyleColorsDark();
     ImGui::GetStyle().WindowRounding = 4;
     ImGui_ImplSDL2_InitForOpenGL(win, gl);
+#if defined(__SWITCH__)
+    ImGui_ImplOpenGL3_Init("#version 300 es");
+#else
     ImGui_ImplOpenGL3_Init("#version 150");
-    io.Fonts->AddFontDefault();
+#endif
+    ui_font_load(18.0f);
     s_font_dirty = true;
     return true;
 }
@@ -115,8 +121,8 @@ static void set_menu(bool open) {
             ImGui::GetIO().ClearInputKeys(); /* nothing carried over from before */
         }
         /* Packs installed while the game runs show up the next time the menu opens. */
-        s_text_packs = find_packs("lang", "Japanese (original)");
-        s_voice_packs = find_packs("dub", "Japanese (original)");
+        s_text_packs = find_packs("lang", tr("Japanese (original)"));
+        s_voice_packs = find_packs("dub", tr("Japanese (original)"));
     } else {
         settings_save(s_settings);
     }
@@ -209,74 +215,97 @@ static void draw_menu(const ImGuiViewport *vp) {
     ImGui::SetNextWindowSize(ImVec2(width, 0.0f), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.92f);
     bool open = true;
-    ImGui::Begin("Settings (F1)", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove |
+    ImGui::Begin(tr("Settings (F1)"), &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove |
                                              ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoResize);
     ImGui::PushItemWidth(-160.0f * ui);
     if (ImGui::BeginTabBar("tabs")) {
-        if (ImGui::BeginTabItem("Settings")) {
-            ImGui::SeparatorText("Display");
+        if (ImGui::BeginTabItem(tr("Settings"))) {
+            ImGui::SeparatorText(tr("Display"));
             bool fs = s->fullscreen != 0;
             if (s_menu_focus) {
                 ImGui::SetKeyboardFocusHere();
                 s_menu_focus = false;
             }
-            if (ImGui::Checkbox("Fullscreen", &fs)) {
+            if (ImGui::Checkbox(tr("Fullscreen"), &fs)) {
                 s->fullscreen = fs;
                 apply |= OVERLAY_APPLY_VIDEO;
             }
             note_focus("Fullscreen");
             ImGui::SameLine(0, 24.0f * ui);
             bool vsync = s->vsync != 0;
-            if (ImGui::Checkbox("VSync", &vsync)) {
+            if (ImGui::Checkbox(tr("VSync"), &vsync)) {
                 s->vsync = vsync;
                 apply |= OVERLAY_APPLY_VIDEO;
             }
             note_focus("VSync");
             bool smooth = s->smooth != 0;
-            if (ImGui::Checkbox("Smooth motion (60 fps)", &smooth)) {
+            if (ImGui::Checkbox(tr("Smooth motion (60 fps)"), &smooth)) {
                 s->smooth = smooth;
                 apply |= OVERLAY_APPLY_VIDEO;
             }
             note_focus("Smooth motion");
             ImGui::SameLine();
-            ImGui::TextDisabled(s->smooth ? "(in-between frames; game speed unchanged)" : "(original frame rate)");
-            if (ImGui::SliderInt("Render scale", &s->render_scale, 0, 8, s->render_scale ? "%dx" : "Auto")) {
+            ImGui::TextDisabled("%s", s->smooth ? tr("(in-between frames; game speed unchanged)") : tr("(original frame rate)"));
+            if (ImGui::SliderInt(tr("Render scale"), &s->render_scale, 0, 8, s->render_scale ? "%dx" : tr("Auto"))) {
                 apply |= OVERLAY_APPLY_VIDEO;
             }
             note_focus("Render scale");
-            ImGui::TextDisabled(s->render_scale ? "%d x %d internal; 1x = original pixels" : "window resolution",
-                                320 * s->render_scale, 240 * s->render_scale);
+            if (s->render_scale) {
+                ImGui::TextDisabled(tr("%d x %d internal; 1x = original pixels"), 320 * s->render_scale,
+                                    240 * s->render_scale);
+            } else {
+                ImGui::TextDisabled("%s", tr("window resolution"));
+            }
 
-            ImGui::SeparatorText("Sound");
-            if (ImGui::SliderInt("Volume", &s->volume, 0, 100, "%d%%")) {
+            ImGui::SeparatorText(tr("Sound"));
+            if (ImGui::SliderInt(tr("Volume"), &s->volume, 0, 100, "%d%%")) {
                 apply |= OVERLAY_APPLY_VOLUME;
             }
             note_focus("Volume");
 
-            ImGui::SeparatorText("Language");
-            if (pack_combo("Text / subtitles", s_text_packs, s->text_lang, sizeof s->text_lang)) {
+            ImGui::SeparatorText(tr("Language"));
+            {
+                const char *ui_codes[] = {"auto", "zh", "en"};
+                const char *ui_labels[] = {tr("Auto (system)"), "简体中文", "English"};
+                int cur_ui = 0;
+                for (int i = 0; i < 3; i++) {
+                    if (strcmp(s->ui_lang, ui_codes[i]) == 0) cur_ui = i;
+                }
+                if (ImGui::BeginCombo(tr("Interface language"), ui_labels[cur_ui])) {
+                    for (int i = 0; i < 3; i++) {
+                        if (ImGui::Selectable(ui_labels[i], cur_ui == i)) {
+                            snprintf(s->ui_lang, sizeof s->ui_lang, "%s", ui_codes[i]);
+                            i18n_set_language(s->ui_lang);
+                            s_text_packs = find_packs("lang", tr("Japanese (original)"));
+                            s_voice_packs = find_packs("dub", tr("Japanese (original)"));
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+            if (pack_combo(tr("Text / subtitles"), s_text_packs, s->text_lang, sizeof s->text_lang)) {
                 apply |= OVERLAY_APPLY_TEXT;
             }
             note_focus("Text / subtitles");
-            if (pack_combo("Voices", s_voice_packs, s->voice_lang, sizeof s->voice_lang)) {
+            if (pack_combo(tr("Voices"), s_voice_packs, s->voice_lang, sizeof s->voice_lang)) {
                 apply |= OVERLAY_APPLY_VOICE;
             }
             note_focus("Voices");
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Controls")) {
+        if (ImGui::BeginTabItem(tr("Controls"))) {
             static const char *const labels[SETTINGS_NUM_KEYS] = {
                 "Up", "Down", "Left", "Right", "Cross", "Circle", "Square", "Triangle",
                 "L1", "L2", "L3", "R1", "R2", "R3", "Start", "Select",
             };
-            ImGui::TextDisabled("Click a button, then press a key (Esc cancels).");
+            ImGui::TextDisabled("%s", tr("Click a button, then press a key (Esc cancels)."));
             if (ImGui::BeginTable("keys", 4, ImGuiTableFlags_SizingStretchSame)) {
                 for (int b = 0; b < SETTINGS_NUM_KEYS; b++) {
                     ImGui::TableNextColumn();
-                    ImGui::TextUnformatted(labels[b]);
+                    ImGui::TextUnformatted(tr(labels[b]));
                     ImGui::TableNextColumn();
                     ImGui::PushID(b);
-                    const char *shown = s_rebind == b ? "press a key..." : s->keys[b];
+                    const char *shown = s_rebind == b ? tr("press a key...") : s->keys[b];
                     if (ImGui::Button(shown, ImVec2(-FLT_MIN, 0))) {
                         s_rebind = b;
                     }
@@ -284,7 +313,7 @@ static void draw_menu(const ImGuiViewport *vp) {
                 }
                 ImGui::EndTable();
             }
-            if (ImGui::Button("Default keys")) {
+            if (ImGui::Button(tr("Default keys"))) {
                 for (int b = 0; b < SETTINGS_NUM_KEYS; b++) {
                     SDL_strlcpy(s->keys[b], settings_default_key(b), sizeof s->keys[b]);
                 }
@@ -298,68 +327,68 @@ static void draw_menu(const ImGuiViewport *vp) {
         const bool force_cheats = want_tab && !strcmp(want_tab, "cheats");
         const bool force_mods = want_tab && !strcmp(want_tab, "mods");
         tab_forced = true;
-        if (ImGui::BeginTabItem("Cheats", nullptr, force_cheats ? ImGuiTabItemFlags_SetSelected : 0)) {
-            ImGui::TextDisabled("Cheats change how the game runs, not your saves.");
+        if (ImGui::BeginTabItem(tr("Cheats"), nullptr, force_cheats ? ImGuiTabItemFlags_SetSelected : 0)) {
+            ImGui::TextDisabled("%s", tr("Cheats change how the game runs, not your saves."));
             bool nodes = s->cheat_open_nodes != 0;
-            if (ImGui::Checkbox("Open any node", &nodes)) {
+            if (ImGui::Checkbox(tr("Open any node"), &nodes)) {
                 s->cheat_open_nodes = nodes;
                 apply |= OVERLAY_APPLY_CHEATS;
             }
             note_focus("Open any node");
             ImGui::SameLine();
-            ImGui::TextDisabled("(ignore the progress a node needs)");
-            if (ImGui::SliderInt("Turbo (hold Tab)", &s->turbo, 0, 8, s->turbo >= 2 ? "%dx" : "Off")) {
+            ImGui::TextDisabled("%s", tr("(ignore the progress a node needs)"));
+            if (ImGui::SliderInt(tr("Turbo (hold Tab)"), &s->turbo, 0, 8, s->turbo >= 2 ? "%dx" : tr("Off"))) {
                 if (s->turbo == 1) {
                     s->turbo = 0;
                 }
                 apply |= OVERLAY_APPLY_CHEATS;
             }
             note_focus("Turbo");
-            ImGui::TextDisabled("Movies and voices keep their normal speed.");
+            ImGui::TextDisabled("%s", tr("Movies and voices keep their normal speed."));
             bool genome = s->cheat_genome != 0;
-            if (ImGui::Checkbox("Genome save title", &genome)) {
+            if (ImGui::Checkbox(tr("Genome save title"), &genome)) {
                 s->cheat_genome = genome;
                 apply |= OVERLAY_APPLY_CHEATS;
             }
             note_focus("Genome save title");
             ImGui::SameLine();
-            ImGui::TextDisabled("(normally 1 save in 70)");
+            ImGui::TextDisabled("%s", tr("(normally 1 save in 70)"));
 
             // The four stats the game counts but only ever shows in a save's title
             // (docs/findings/README.md, item 1). Read live from the game.
-            ImGui::SeparatorText("Lain's hidden stats");
-            ImGui::TextDisabled("Since the last load; save titles show one.");
-            ImGui::Text("Heart-flutter  %3d%%", g_stat_tokimeki);
+            ImGui::SeparatorText(tr("Lain's hidden stats"));
+            ImGui::TextDisabled("%s", tr("Since the last load; save titles show one."));
+            ImGui::Text(tr("Heart-flutter  %3d%%"), g_stat_tokimeki);
             ImGui::SameLine();
-            ImGui::TextDisabled("nodes opened");
-            ImGui::Text("Dejection      %3d%%", g_stat_gakkuri);
+            ImGui::TextDisabled("%s", tr("nodes opened"));
+            ImGui::Text(tr("Dejection      %3d%%"), g_stat_gakkuri);
             ImGui::SameLine();
-            ImGui::TextDisabled("Lain's reactions");
-            ImGui::Text("Harumage       %3d%%", g_stat_harumage);
+            ImGui::TextDisabled("%s", tr("Lain's reactions"));
+            ImGui::Text(tr("Harumage       %3d%%"), g_stat_harumage);
             ImGui::SameLine();
-            ImGui::TextDisabled("empty cells pressed");
-            ImGui::Text("Poison waves   %3d ", g_screensaver_count);
+            ImGui::TextDisabled("%s", tr("empty cells pressed"));
+            ImGui::Text(tr("Poison waves   %3d "), g_screensaver_count);
             ImGui::SameLine();
-            ImGui::TextDisabled("screensavers");
+            ImGui::TextDisabled("%s", tr("screensavers"));
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Mods", nullptr, force_mods ? ImGuiTabItemFlags_SetSelected : 0)) {
+        if (ImGui::BeginTabItem(tr("Mods"), nullptr, force_mods ? ImGuiTabItemFlags_SetSelected : 0)) {
             const std::vector<ModActive> &active = mods_active();
             if (active.empty()) {
-                ImGui::TextDisabled("No mods are on.");
+                ImGui::TextDisabled("%s", tr("No mods are on."));
             }
             for (const ModActive &m : active) {
                 ImGui::BulletText("%s%s%s", m.name.c_str(), m.version.empty() ? "" : "  ", m.version.c_str());
                 char detail[128];
-                int n = snprintf(detail, sizeof detail, "%d file%s", m.files, m.files == 1 ? "" : "s");
-                if (m.overridden) n += snprintf(detail + n, sizeof detail - n, ", %d replaced by later mods", m.overridden);
-                if (m.skipped) snprintf(detail + n, sizeof detail - n, ", %d skipped", m.skipped);
+                int n = snprintf(detail, sizeof detail, tr("%d file%s"), m.files, m.files == 1 ? "" : "s");
+                if (m.overridden) n += snprintf(detail + n, sizeof detail - n, tr(", %d replaced by later mods"), m.overridden);
+                if (m.skipped) snprintf(detail + n, sizeof detail - n, tr(", %d skipped"), m.skipped);
                 ImGui::SameLine();
                 ImGui::TextDisabled("(%s)", detail);
             }
             ImGui::Spacing();
             ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-            ImGui::TextWrapped("Mods are chosen on the launcher's Mods tab and apply when the game starts.");
+            ImGui::TextWrapped("%s", tr("Mods are chosen on the launcher's Mods tab and apply when the game starts."));
             ImGui::PopStyleColor();
             modrt_menu(); /* each mod's settings and log */
             ImGui::EndTabItem();
@@ -372,17 +401,17 @@ static void draw_menu(const ImGuiViewport *vp) {
     }
 
     ImGui::Separator();
-    if (ImGui::Button("Resume")) {
+    if (ImGui::Button(tr("Resume"))) {
         open = false;
     }
     note_focus("Resume");
     ImGui::SameLine();
-    if (ImGui::Button("Quit game")) {
+    if (ImGui::Button(tr("Quit game"))) {
         apply |= OVERLAY_APPLY_QUIT;
     }
     note_focus("Quit game");
     ImGui::SameLine();
-    ImGui::TextDisabled("Esc / F1 to close");
+    ImGui::TextDisabled("%s", tr("Esc / F1 to close"));
     ImGui::PopItemWidth();
     ImGui::End();
     ImGui::PopFont();

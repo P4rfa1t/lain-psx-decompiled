@@ -1,7 +1,7 @@
 /* Lain native client entry point: launcher/setup window, then the game. */
 #include <assert.h> /* libgpu.h uses static_assert */
 #include <SDL.h>
-#ifndef _WIN32 /* POSIX crash handler (debug aid) */
+#if !defined(_WIN32) && !defined(__SWITCH__) /* POSIX crash handler (debug aid) */
 #include <execinfo.h>
 #include <signal.h>
 #include <unistd.h>
@@ -17,7 +17,9 @@
 #include "libgte.h"
 #include "libgpu.h" /* before PsyX_public.h: it uses struct _RECT16 */
 #include "PsyX/PsyX_public.h"
+#ifndef __SWITCH__
 #include "PsyX/common/glad.h"
+#endif
 #include "libcd.h"
 #include "libspu.h" /* LainSpu_SetOutputGain: master volume */
 #include "libgs.h"
@@ -35,6 +37,7 @@
 #include "hdtex.h"
 #include "overlay.h"
 #include "app_icon.h"
+#include "i18n.h"
 #include "psx_arena.h"
 #include "psx_mem.h"
 #include "settings.h"
@@ -661,7 +664,7 @@ static void on_end_scene(void) {
 
 /* Prints the faulting address and a backtrace on a crash (lldb isn't always
  * usable in batch runs). Symbolize with atos -o lain -l <image base> <pc>. */
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__SWITCH__)
 #include <sys/ucontext.h>
 static void crash_handler(int sig, siginfo_t *info, void *uctx) {
     void *frames[64];
@@ -686,7 +689,7 @@ static void crash_handler(int sig, siginfo_t *info, void *uctx) {
 #endif /* !_WIN32 */
 
 static void debug_hooks_init(void) {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__SWITCH__)
     struct sigaction sa;
     memset(&sa, 0, sizeof sa);
     sa.sa_sigaction = crash_handler;
@@ -810,14 +813,22 @@ static int boot_game(const Settings *initial, const char *disc1, const char *dis
     PsyX_Initialise("Serial Experiments Lain", settings->width, settings->height,
                     settings->fullscreen);
     if (!SDL_GL_GetCurrentWindow()) {
+#if defined(__SWITCH__)
+        char msg[512];
+        snprintf(msg, sizeof msg, "Could not open the game window with OpenGL ES 3.0.\n\n%s",
+                 SDL_GetError());
+#else
         /* Typically no OpenGL 3.2 driver (old GPU, remote desktop, VM). */
         char msg[512];
         snprintf(msg, sizeof msg,
                  "Could not open the game window with OpenGL 3.2.\n\n%s\n\n"
                  "Update your graphics driver; the game needs OpenGL 3.2 or newer.",
                  SDL_GetError());
+#endif
         fprintf(stderr, "lain: %s\n", msg);
+#ifndef __SWITCH__
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Serial Experiments Lain", msg, NULL);
+#endif
         return 1;
     }
     app_icon_apply(SDL_GL_GetCurrentWindow());
@@ -925,6 +936,7 @@ int main(int argc, char **argv) {
     }
     Settings settings;
     settings_load(&settings);
+    i18n_set_language(settings.ui_lang);
 
     /* `lain --play`: skip the launcher and boot with the saved settings/discs. */
     int play = argc >= 2 && strcmp(argv[1], "--play") == 0;

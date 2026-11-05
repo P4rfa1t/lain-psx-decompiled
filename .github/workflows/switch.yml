@@ -1,0 +1,19 @@
+# Builds the Nintendo Switch homebrew client. No game data is needed to build:
+# the client reads the player's own disc dumps from the SD card at runtime.
+name: switch client
+
+on:
+  push:
+    paths: ["port/**", ".github/workflows/switch.yml"]
+  pull_request:
+    paths: ["port/**", ".github/workflows/switch.yml"]
+  workflow_dispatch:
+
+jobs:
+  switch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: chmod +x port/tools/package_switch.sh && port/tools/package_switch.sh
+      - uses: actions/upload-artifact@v4
+        with: {name: lain-switch, path: dist/Lain-switch.zip}

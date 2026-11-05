@@ -4,6 +4,15 @@
 cmake_minimum_required(VERSION 3.20)
 project(lain_native C CXX ASM)
 
+set(LAIN_SWITCH OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch")
+    set(LAIN_SWITCH ON)
+endif()
+if(LAIN_SWITCH)
+    message(STATUS "Building the Nintendo Switch port (devkitPro)")
+    add_compile_definitions(__SWITCH__)
+endif()
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 if(APPLE)
@@ -64,11 +73,20 @@ if(NOT TARGET SDL2::SDL2)
     find_package(SDL2 REQUIRED)
 endif()
 find_package(OpenGL REQUIRED)
-target_link_libraries(imgui PUBLIC SDL2::SDL2 OpenGL::GL)
+if(LAIN_SWITCH)
+    # Use <GLES3/gl3.h> directly instead of ImGui's dlopen-based desktop loader.
+    target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_ES3)
+    target_link_libraries(imgui PUBLIC SDL2::SDL2 OpenGL::GL EGL GLESv2)
+else()
+    target_link_libraries(imgui PUBLIC SDL2::SDL2 OpenGL::GL)
+endif()
 
-# tinyfiledialogs (zlib): native "open file" dialogs.
-add_library(tinyfd STATIC external/tinyfiledialogs/tinyfiledialogs.c)
-target_include_directories(tinyfd PUBLIC external/tinyfiledialogs)
+# tinyfiledialogs (zlib): native "open file" dialogs. Desktop only; the Switch
+# launcher uses its own SD card browser (client/setup_ui.cpp).
+if(NOT LAIN_SWITCH)
+    add_library(tinyfd STATIC external/tinyfiledialogs/tinyfiledialogs.c)
+    target_include_directories(tinyfd PUBLIC external/tinyfiledialogs)
+endif()
 
 # The PS1 RAM arena with every game global at its original offset (generated).
 add_library(psx_arena STATIC game/generated/psx_arena.S)
@@ -77,7 +95,7 @@ add_library(psx_arena STATIC game/generated/psx_arena.S)
 file(GLOB LUA_SRCS external/lua/*.c)
 add_library(lua STATIC ${LUA_SRCS})
 target_include_directories(lua PUBLIC external/lua)
-if(NOT WIN32)
+if(NOT WIN32 AND NOT LAIN_SWITCH)
     target_compile_definitions(lua PRIVATE LUA_USE_POSIX)
 endif()
 
@@ -86,9 +104,14 @@ add_library(client STATIC
     client/iso.c client/psx_mem.c client/overlay.cpp client/packs.cpp client/sub_download.cpp client/unused_gallery.cpp client/app_icon.c
     client/tracks.c client/subtitles.c client/subtitle_kit.c client/dub.c client/dub_player.c
     client/mods.cpp client/mods_ui.cpp client/modrt.cpp client/moddata.cpp client/hdtex.cpp client/json.cpp client/napk.c client/png.c client/tim.c
+    client/i18n.c client/ui_font.cpp
     external/stb/stb_vorbis_impl.c)
 target_include_directories(client PUBLIC client game/include external/stb)
-target_link_libraries(client PUBLIC imgui tinyfd psx lua SDL2::SDL2)
+if(LAIN_SWITCH)
+    target_link_libraries(client PUBLIC imgui psx lua SDL2::SDL2)
+else()
+    target_link_libraries(client PUBLIC imgui tinyfd psx lua SDL2::SDL2)
+endif()
 
 # The ported game code (every function has C; see game/PORT_TYPES.md). It is
 # compiled from copies in which every game function can be replaced at run time
@@ -135,4 +158,9 @@ if(LAIN_TRACE)
     target_compile_options(game PRIVATE -finstrument-functions)
     target_sources(lain PRIVATE src/trace.c)
     target_link_options(lain PRIVATE -rdynamic)
+endif()
+
+if(LAIN_SWITCH AND COMMAND nx_create_nro)
+    # Produces <build>/lain.nro (and the .nacp) from the Switch ELF.
+    nx_create_nro(lain)
 endif()

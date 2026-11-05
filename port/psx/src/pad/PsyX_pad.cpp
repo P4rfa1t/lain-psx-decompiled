@@ -41,11 +41,13 @@ int PsyX_Pad_InitSystem()
 	// init keyboard state
 	g_sdlKeyboardState = SDL_GetKeyboardState(NULL);
 
-	if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC) < 0)
+	if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0)
 	{
 		eprinterr("Failed to initialise SDL GameController subsystem!\n");
 		return 0;
 	}
+	/* Haptics are optional (and absent on Switch); never let them block pads. */
+	SDL_InitSubSystem(SDL_INIT_HAPTIC);
 
 	// Add more controllers from custom file
 	SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt");

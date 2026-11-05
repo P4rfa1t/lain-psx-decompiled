@@ -36,6 +36,14 @@ extern "C" {
 #define USE_OFFSCREEN_BLIT		1
 #define USE_FRAMEBUFFER_BLIT	1
 
+#elif defined(__SWITCH__)
+
+// Switch GLES3: the VRAM texture is RG8, so the RGBA8 offscreen blit cannot
+// target it; read back on the CPU instead. The PBO path is also skipped.
+#define USE_PBO					0
+#define USE_OFFSCREEN_BLIT		0
+#define USE_FRAMEBUFFER_BLIT	0
+
 #else
 
 // OpenGL ES/Web GL has slowdowns and doesn't allow GL_LUMINANCE_ALPHA format as framebuffer, so it's disabled
@@ -225,7 +233,8 @@ void PBO_Destroy(GrPBO* pbo)
 void PBO_Download(GrPBO* pbo)
 {
 	unsigned char* ptr;
-	
+	(void)ptr;
+
 #if USE_PBO
 	if (pbo->num_downloads < pbo->num_pbos)
 	{
@@ -273,11 +282,9 @@ void PBO_Download(GrPBO* pbo)
 
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 #else
-	// FIXME: THIS is very slow
-	// Do not use at all
-
-	// glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); /* just make sure we're not accidentilly using a PBO. */
-	// glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pbo->pixels);
+	// No PBO: read the currently bound framebuffer straight into the CPU buffer.
+	glReadPixels(0, 0, pbo->width, pbo->height, pbo->fmt, GL_UNSIGNED_BYTE, pbo->pixels);
+	pbo->num_downloads++;
 #endif
 }
 
@@ -457,7 +464,7 @@ void GR_Shutdown()
 
 void GR_UpdateSwapIntervalState(int swapInterval)
 {
-#if defined(RENDERER_OGL)
+#if defined(RENDERER_OGL) || defined(RENDERER_OGLES)
 	SDL_GL_SetSwapInterval(swapInterval);
 #endif
 }
@@ -634,7 +641,11 @@ void GR_InterpBegin()
 	glBlitFramebuffer(0, 0, s_interpW, s_interpH, 0, 0, s_interpW, s_interpH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 	g_screenFramebuffer = s_interpFbo;
 	glBindFramebuffer(GL_FRAMEBUFFER, s_interpFbo);
+#if defined(RENDERER_OGLES)
+	glClearDepthf(1.0f);
+#else
 	glClearDepth(1.0f);
+#endif
 	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	int vx, vy, vw, vh;
 	GR_GetViewRect(&vx, &vy, &vw, &vh);
@@ -703,7 +714,11 @@ void GR_BeginScene()
 #ifdef RENDERER_OGLES
 	//glClearDepthf(1.0f);
 #else
+#if defined(RENDERER_OGLES)
+	glClearDepthf(1.0f);
+#else
 	glClearDepth(1.0f);
+#endif
 #endif
 	glClear(GL_DEPTH_BUFFER_BIT);
 	glClear(GL_STENCIL_BUFFER_BIT);
@@ -818,7 +833,7 @@ GLint u_texelSizeLoc;
 	"		return color_rg;\n"\
 	"	}\n"
 
-#if (VRAM_FORMAT == GL_LUMINANCE_ALPHA)
+#if defined(ES2_SHADERS)
 
 #define GPU_FETCH_VRAM_FUNC \
 		"	const vec2 c_VRAMTexel = vec2(1.0 / 1024.0, 1.0 / 512.0);\n"\

@@ -12,6 +12,9 @@
 #elif defined(__RPI__)
 #   define RENDERER_OGLES
 #   define OGLES_VERSION (3)
+#elif defined(__SWITCH__)
+#   define RENDERER_OGLES
+#   define OGLES_VERSION (3)
 #elif defined(__EMSCRIPTEN__)
 #   define RENDERER_OGLES
 #   define OGLES_VERSION (2)
@@ -103,8 +106,15 @@
 #	define VRAM_FORMAT            GL_RG
 #	define VRAM_INTERNAL_FORMAT   GL_RG32F
 #elif defined(RENDERER_OGLES)
+#   if OGLES_VERSION == 3
+// GLES3 removed GL_LUMINANCE_ALPHA, and it is not color-renderable there.
+// Two 8-bit channels map the PS1 VRAM's low/high bytes exactly as RG does.
+#	define VRAM_FORMAT            GL_RG
+#	define VRAM_INTERNAL_FORMAT   GL_RG8
+#   else
 #	define VRAM_FORMAT            GL_LUMINANCE_ALPHA
 #	define VRAM_INTERNAL_FORMAT   GL_LUMINANCE_ALPHA
+#   endif
 #endif
 
 #define LUT_WIDTH 		(256)
