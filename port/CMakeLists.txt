@@ -76,6 +76,8 @@ find_package(OpenGL REQUIRED)
 if(LAIN_SWITCH)
     # Use <GLES3/gl3.h> directly instead of ImGui's dlopen-based desktop loader.
     target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_ES3)
+    # No fork/execvp on the console; the shell-open helper is unused there.
+    target_compile_definitions(imgui PUBLIC IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS)
     target_link_libraries(imgui PUBLIC SDL2::SDL2 OpenGL::GL EGL GLESv2)
 else()
     target_link_libraries(imgui PUBLIC SDL2::SDL2 OpenGL::GL)

@@ -19,6 +19,8 @@
 #include "PsyX/PsyX_public.h"
 #ifndef __SWITCH__
 #include "PsyX/common/glad.h"
+#else
+#include <GLES3/gl3.h>
 #endif
 #include "libcd.h"
 #include "libspu.h" /* LainSpu_SetOutputGain: master volume */

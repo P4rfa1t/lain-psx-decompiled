@@ -21,6 +21,17 @@
 #include "psx_arena.h"
 #include "settings.h"
 
+#ifdef __SWITCH__
+/* newlib defines these in <limits.h> only for C, but Lua's luaconf.h needs
+ * LLONG_MAX when it is included from C++. */
+#include <limits.h>
+#ifndef LLONG_MAX
+#define LLONG_MAX __LONG_LONG_MAX__
+#define LLONG_MIN (-__LONG_LONG_MAX__ - 1)
+#define ULLONG_MAX (__LONG_LONG_MAX__ * 2ULL + 1ULL)
+#endif
+#endif
+
 extern "C" {
 #include "lauxlib.h"
 #include "lua.h"

@@ -27,11 +27,15 @@ docker run --rm \
       -DPython3_EXECUTABLE=/usr/bin/python3 \
       -Wno-dev >/tmp/configure.log 2>&1 || { cat /tmp/configure.log; exit 1; }
     cmake --build /tmp/s >/tmp/build.log 2>&1 || { tail -80 /tmp/build.log; exit 1; }
-    "$DEVKITPRO/tools/bin/nacptool" --create \
-      "Serial Experiments Lain" "lain-psx-decompiled" "0.1.0" /tmp/s/lain.nacp
-    "$DEVKITPRO/tools/bin/elf2nro" /tmp/s/lain /tmp/s/lain.nro --nacp=/tmp/s/lain.nacp
     mkdir -p /tmp/pkg/Lain
-    cp /tmp/s/lain.nro /tmp/pkg/Lain/
+    if [ -f /tmp/s/lain.nro ]; then
+      cp /tmp/s/lain.nro /tmp/pkg/Lain/lain.nro
+    else
+      "$DEVKITPRO/tools/bin/nacptool" --create \
+        "Serial Experiments Lain" "lain-psx-decompiled" "0.1.0" /tmp/s/lain.nacp
+      "$DEVKITPRO/tools/bin/elf2nro" /tmp/s/lain.elf /tmp/pkg/Lain/lain.nro \
+        --nacp=/tmp/s/lain.nacp
+    fi
     cp /lic/LICENSE /tmp/pkg/Lain/LICENSE.txt
     cp -R /lic/thirdparty /tmp/pkg/Lain/thirdparty
     cat > /tmp/pkg/Lain/README.txt <<EOF

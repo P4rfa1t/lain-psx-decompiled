@@ -231,7 +231,9 @@ static void scan_sdmc_discs(std::vector<std::string> &queue) {
         while ((e = readdir(d))) {
             const char *n = e->d_name;
             size_t len = strlen(n);
-            if (len > 4 && SDL_strcasecmp(n + len - 4, ".cue") == 0) {
+            if (len > 4 && (SDL_strcasecmp(n + len - 4, ".cue") == 0 ||
+                            SDL_strcasecmp(n + len - 4, ".bin") == 0 ||
+                            SDL_strcasecmp(n + len - 4, ".img") == 0)) {
                 char p[1024];
                 snprintf(p, sizeof p, "%s/%s", dir, n);
                 queue.push_back(p);
@@ -363,9 +365,9 @@ extern "C" int setup_ui_run(Settings *s) {
 #ifdef __SWITCH__
             scan_sdmc_discs(queue);
 #else
-            const char *filters[] = {"*.cue", "*.bin"};
-            const char *picked = tinyfd_openFileDialog(tr("Choose a Serial Experiments Lain disc"), "", 2, filters,
-                                                       tr("Disc image (.cue, .bin)"), 1);
+            const char *filters[] = {"*.cue", "*.bin", "*.img"};
+            const char *picked = tinyfd_openFileDialog(tr("Choose a Serial Experiments Lain disc"), "", 3, filters,
+                                                       tr("Disc image (.cue, .bin, .img)"), 1);
             if (picked) {
                 // Multiple selections come back separated by '|'.
                 std::string all = picked;
@@ -380,7 +382,7 @@ extern "C" int setup_ui_run(Settings *s) {
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
-        ImGui::TextDisabled("%s", tr("or drop .cue files on this window. Either disc, any order."));
+        ImGui::TextDisabled("%s", tr("or drop .cue, .bin or .img files on this window. Either disc, any order."));
         if (busy) {
             ImGui::ProgressBar(job.progress, ImVec2(-1, 0), tr("Importing and verifying..."));
         } else if (!last_message.empty()) {
