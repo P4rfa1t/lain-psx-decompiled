@@ -306,19 +306,21 @@ extern "C" int setup_ui_run(Settings *s) {
     ImGui::StyleColorsLight();
     {
         ImGuiStyle &st = ImGui::GetStyle();
+        /* Scale the stock sizes first, then set ours in real pixels. */
+        st.ScaleAllSizes(30.0f / 18.0f);
         st.WindowRounding = 0;
         st.FrameRounding = 14;
         st.GrabRounding = 14;
         st.PopupRounding = 14;
-        st.WindowPadding = ImVec2(48, 34);
-        st.FramePadding = ImVec2(18, 14);
-        st.ItemSpacing = ImVec2(16, 14);
+        st.WindowPadding = ImVec2(56, 30);
+        st.FramePadding = ImVec2(22, 14);
+        st.ItemSpacing = ImVec2(18, 16);
         st.ItemInnerSpacing = ImVec2(12, 10);
         st.TouchExtraPadding = ImVec2(10, 10);
         st.Colors[ImGuiCol_WindowBg] = ImVec4(1, 1, 1, 1);
         st.Colors[ImGuiCol_Text] = ImVec4(0.09f, 0.09f, 0.10f, 1);
         st.Colors[ImGuiCol_TextDisabled] = ImVec4(0.46f, 0.46f, 0.49f, 1);
-        st.Colors[ImGuiCol_PopupBg] = ImVec4(0.97f, 0.97f, 0.98f, 1);
+        st.Colors[ImGuiCol_PopupBg] = ImVec4(1, 1, 1, 1);
         st.Colors[ImGuiCol_Border] = ImVec4(0.90f, 0.90f, 0.92f, 1);
         st.Colors[ImGuiCol_Separator] = ImVec4(0.86f, 0.86f, 0.88f, 1);
         st.Colors[ImGuiCol_Header] = ImVec4(0.00f, 0.62f, 0.89f, 1);
@@ -327,7 +329,8 @@ extern "C" int setup_ui_run(Settings *s) {
         st.Colors[ImGuiCol_Button] = ImVec4(0.00f, 0.62f, 0.89f, 1);
         st.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.00f, 0.70f, 0.95f, 1);
         st.Colors[ImGuiCol_ButtonActive] = ImVec4(0.00f, 0.55f, 0.82f, 1);
-        st.Colors[ImGuiCol_NavCursor] = ImVec4(0.00f, 0.62f, 0.89f, 1);
+        /* No ImGui focus rectangle: the cards and buttons show focus themselves. */
+        st.Colors[ImGuiCol_NavCursor] = ImVec4(0, 0, 0, 0);
     }
 #else
     ImGui::StyleColorsDark();
@@ -338,7 +341,6 @@ extern "C" int setup_ui_run(Settings *s) {
 #if defined(__SWITCH__)
     // 720p on a 6.2" screen: 18 px is unreadable at arm's length.
     ui_font_load(30.0f);
-    ImGui::GetStyle().ScaleAllSizes(30.0f / 18.0f);
     static GLuint logo_tex = load_logo_texture();
 #else
     ui_font_load(18.0f);
@@ -424,7 +426,7 @@ extern "C" int setup_ui_run(Settings *s) {
         const bool sub_busy = subjob.state == SubJob::RUNNING;
         // Tabs; Play/Quit stay below them. The console only needs language.
 #ifdef __SWITCH__
-        const float footer = 138.0f;
+        const float footer = 176.0f;
 #else
         const float footer = 64.0f;
 #endif
@@ -516,45 +518,43 @@ extern "C" int setup_ui_run(Settings *s) {
 #ifdef __SWITCH__
         {
             /* One card per setting: label left, value right. Tap the card or
-             * press A on it to pick, exactly like the console's settings. */
+             * press A on it to switch to the next value - no drop-down, so a
+             * change is one press and the option list is always readable. */
             auto switch_row = [](const char *id, const char *label, const std::vector<PackOption> &opts,
                                  const char *current, char *code, size_t cap, float width) {
                 ImGui::PushID(id);
-                const float row_h = 84.0f;
+                const float row_h = 88.0f;
                 const ImVec2 p = ImGui::GetCursorScreenPos();
-                const bool pressed = ImGui::InvisibleButton("##row", ImVec2(width, row_h)) || ImGui::IsItemActivated();
+                const bool pressed = ImGui::InvisibleButton("##row", ImVec2(width, row_h), ImGuiButtonFlags_EnableNav);
+                const bool focused = ImGui::IsItemFocused();
                 const bool hovered = ImGui::IsItemHovered();
                 ImDrawList *dl = ImGui::GetWindowDrawList();
-                const bool open = ImGui::IsPopupOpen("##pick");
+                bool changed = false;
+                const char *shown = current;
+                int cur = 0;
+                for (size_t i = 0; i < opts.size(); i++) {
+                    if (opts[i].code == current) {
+                        cur = (int)i;
+                        shown = opts[i].label.c_str();
+                    }
+                }
+                if (pressed && !opts.empty()) {
+                    const PackOption &next = opts[(size_t)(cur + 1) % opts.size()];
+                    snprintf(code, cap, "%s", next.code.c_str());
+                    shown = next.label.c_str();
+                    changed = true;
+                }
                 dl->AddRectFilled(p, ImVec2(p.x + width, p.y + row_h),
-                                  (open || hovered) ? IM_COL32(0, 158, 227, 36) : IM_COL32(243, 243, 245, 255),
+                                  (focused || hovered) ? IM_COL32(0, 158, 227, 44) : IM_COL32(243, 243, 245, 255),
                                   14.0f);
                 const float ty = p.y + (row_h - ImGui::GetTextLineHeight()) * 0.5f;
                 dl->AddText(ImVec2(p.x + 28, ty), IM_COL32(28, 28, 30, 255), label);
-                const char *shown = current;
-                for (auto &o : opts) {
-                    if (o.code == current) shown = o.label.c_str();
-                }
                 const ImVec2 ts = ImGui::CalcTextSize(shown);
-                dl->AddText(ImVec2(p.x + width - ts.x - 52, ty), IM_COL32(0, 118, 188, 255), shown);
+                dl->AddText(ImVec2(p.x + width - ts.x - 52, ty), IM_COL32(0, 110, 178, 255), shown);
+                /* A small "next" chevron hints that a press cycles the value. */
                 const float cx = p.x + width - 26, cy = p.y + row_h * 0.5f;
                 dl->AddTriangleFilled(ImVec2(cx - 7, cy - 4), ImVec2(cx + 7, cy - 4), ImVec2(cx, cy + 5),
-                                      IM_COL32(0, 118, 188, 255));
-                if (pressed) {
-                    ImGui::OpenPopup("##pick");
-                }
-                bool changed = false;
-                ImGui::SetNextWindowSize(ImVec2(width * 0.6f, 0), ImGuiCond_Appearing);
-                if (ImGui::BeginPopup("##pick")) {
-                    for (auto &o : opts) {
-                        if (ImGui::Selectable(o.label.c_str(), o.code == current, 0, ImVec2(0, 52))) {
-                            snprintf(code, cap, "%s", o.code.c_str());
-                            changed = true;
-                            ImGui::CloseCurrentPopup();
-                        }
-                    }
-                    ImGui::EndPopup();
-                }
+                                      IM_COL32(0, 110, 178, 255));
                 ImGui::PopID();
                 return changed;
             };
@@ -733,19 +733,33 @@ extern "C" int setup_ui_run(Settings *s) {
                 result = 1;
             }
         }
+#ifdef __SWITCH__
+        if (ImGui::IsItemFocused()) {
+            ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                                                IM_COL32(0, 110, 178, 255), 14.0f, 0, 3.0f);
+        }
+#endif
         ImGui::EndDisabled();
         ImGui::SameLine();
         if (ImGui::Button(tr("Quit"), quit_size)) {
             result = 0;
         }
+#ifdef __SWITCH__
+        if (ImGui::IsItemFocused()) {
+            ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                                                IM_COL32(0, 110, 178, 255), 14.0f, 0, 3.0f);
+        }
+#endif
         if (!have_disc1) {
             ImGui::SameLine();
             ImGui::TextDisabled("%s", tr("Import disc 1 to play. Disc 2 is needed for Site B."));
         }
 #ifdef __SWITCH__
         ImGui::Dummy(ImVec2(0, 2));
+        ImGui::PushFont(nullptr, 22.0f);
         ImGui::TextDisabled("%s", tr("A Confirm    B Back    D-pad Select    Touch to tap"));
         ImGui::TextDisabled("%s", tr("A ○    B ×    X △    Y □        + Start        - Select"));
+        ImGui::PopFont();
 #endif
 
         ImGui::End();

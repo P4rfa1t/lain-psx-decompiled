@@ -57,15 +57,23 @@ extern "C" void lain_switch_input_feed(float display_w, float display_h) {
         io.AddKeyEvent(ImGuiKey_Escape, b);
     }
 
-    HidTouchScreenState st;
-    const size_t n = hidGetTouchScreenStates(&st, 1);
-    const bool down = n > 0 && st.count > 0 && (st.touches[0].attributes & 1);
+    /* Read the recent history: a quick tap can begin and end between two
+     * frames, and sampling only the newest state would drop it (which feels
+     * like the screen ignoring taps until the finger is held). */
+    HidTouchScreenState st[8];
+    const size_t n = hidGetTouchScreenStates(st, 8);
+    bool down = false;
+    const float sx = display_w > 0.0f ? display_w / 1280.0f : 1.0f;
+    const float sy = display_h > 0.0f ? display_h / 720.0f : 1.0f;
+    for (size_t i = 0; i < n; i++) {
+        if (st[i].count > 0 && (st[i].touches[0].attributes & 1)) {
+            down = true;
+            // libnx reports the panel's native 1280x720 pixels.
+            last_x = (float)st[i].touches[0].x * sx;
+            last_y = (float)st[i].touches[0].y * sy;
+        }
+    }
     if (down) {
-        // libnx reports the panel's native 1280x720 pixels.
-        const float sx = display_w > 0.0f ? display_w / 1280.0f : 1.0f;
-        const float sy = display_h > 0.0f ? display_h / 720.0f : 1.0f;
-        last_x = (float)st.touches[0].x * sx;
-        last_y = (float)st.touches[0].y * sy;
         io.AddMousePosEvent(last_x, last_y);
     }
     if (down != touch_down) {

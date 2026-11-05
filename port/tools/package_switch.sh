@@ -8,7 +8,7 @@ cd "$(dirname "$0")/../.."
 mkdir -p dist build
 # A folder inside the checkout (gitignored) is reliably shared with Docker
 # Desktop; /tmp is not on some Windows setups.
-STAGE="$PWD/build/switch-stage"
+STAGE="${LAIN_SWITCH_STAGE:-$PWD/build/switch-stage}"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 trap 'rm -rf "$STAGE"' EXIT
