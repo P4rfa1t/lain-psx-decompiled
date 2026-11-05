@@ -220,6 +220,39 @@ void gallery_draw(Gallery &g) {
 
 }  // namespace
 
+#if defined(__SWITCH__)
+/* The launcher artwork is a plain RGBA file next to settings.ini (written by
+ * the package); 512x512, GDI+-style BGRA byte order. */
+static GLuint load_logo_texture(void) {
+    char path[1100];
+    snprintf(path, sizeof path, "%slain_logo.rgba", settings_data_dir());
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        return 0;
+    }
+    const int W = 512, H = 512;
+    std::vector<unsigned char> px((size_t)W * H * 4);
+    const size_t n = fread(px.data(), 1, px.size(), f);
+    fclose(f);
+    if (n != px.size()) {
+        return 0;
+    }
+    for (size_t i = 0; i + 3 < px.size(); i += 4) {
+        const unsigned char t = px[i];
+        px[i] = px[i + 2];
+        px[i + 2] = t;
+    }
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, W, H, 0, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return tex;
+}
+#endif
+
 extern "C" int setup_ui_run(Settings *s) {
 #ifdef __SWITCH__
     /* No display controls on the console: fullscreen, 2x internal resolution. */
@@ -269,15 +302,44 @@ extern "C" int setup_ui_run(Settings *s) {
 #if defined(__SWITCH__)
     // No mouse or keyboard on the console: navigate with the pad.
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
-#endif
+    /* Light, rounded and roomy, like the console's own settings screens. */
+    ImGui::StyleColorsLight();
+    {
+        ImGuiStyle &st = ImGui::GetStyle();
+        st.WindowRounding = 0;
+        st.FrameRounding = 14;
+        st.GrabRounding = 14;
+        st.PopupRounding = 14;
+        st.WindowPadding = ImVec2(48, 34);
+        st.FramePadding = ImVec2(18, 14);
+        st.ItemSpacing = ImVec2(16, 14);
+        st.ItemInnerSpacing = ImVec2(12, 10);
+        st.TouchExtraPadding = ImVec2(10, 10);
+        st.Colors[ImGuiCol_WindowBg] = ImVec4(1, 1, 1, 1);
+        st.Colors[ImGuiCol_Text] = ImVec4(0.09f, 0.09f, 0.10f, 1);
+        st.Colors[ImGuiCol_TextDisabled] = ImVec4(0.46f, 0.46f, 0.49f, 1);
+        st.Colors[ImGuiCol_PopupBg] = ImVec4(0.97f, 0.97f, 0.98f, 1);
+        st.Colors[ImGuiCol_Border] = ImVec4(0.90f, 0.90f, 0.92f, 1);
+        st.Colors[ImGuiCol_Separator] = ImVec4(0.86f, 0.86f, 0.88f, 1);
+        st.Colors[ImGuiCol_Header] = ImVec4(0.00f, 0.62f, 0.89f, 1);
+        st.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.00f, 0.70f, 0.95f, 1);
+        st.Colors[ImGuiCol_HeaderActive] = ImVec4(0.00f, 0.55f, 0.82f, 1);
+        st.Colors[ImGuiCol_Button] = ImVec4(0.00f, 0.62f, 0.89f, 1);
+        st.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.00f, 0.70f, 0.95f, 1);
+        st.Colors[ImGuiCol_ButtonActive] = ImVec4(0.00f, 0.55f, 0.82f, 1);
+        st.Colors[ImGuiCol_NavCursor] = ImVec4(0.00f, 0.62f, 0.89f, 1);
+    }
+#else
     ImGui::StyleColorsDark();
     ImGui::GetStyle().WindowRounding = 0;
+#endif
     ImGui_ImplSDL2_InitForOpenGL(win, gl);
     ImGui_ImplOpenGL3_Init(glsl);
 #if defined(__SWITCH__)
     // 720p on a 6.2" screen: 18 px is unreadable at arm's length.
     ui_font_load(30.0f);
     ImGui::GetStyle().ScaleAllSizes(30.0f / 18.0f);
+    static GLuint logo_tex = load_logo_texture();
 #else
     ui_font_load(18.0f);
 #endif
@@ -338,9 +400,16 @@ extern "C" int setup_ui_run(Settings *s) {
         ImGui::Begin("setup", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
+#if defined(__SWITCH__)
+        ImGui::PushFont(nullptr, 46.0f);
+        ImGui::TextUnformatted("Serial Experiments Lain");
+        ImGui::PopFont();
+        ImGui::Dummy(ImVec2(0, 6));
+#else
         ImGui::TextUnformatted("Serial Experiments Lain");
         ImGui::TextDisabled("%s", tr("Native client. Game data comes from your own discs."));
         ImGui::Separator();
+#endif
 
         const bool busy = job.state == IMPORT_RUNNING;
         // A finished subtitle download/import (polled here, whatever tab is open).
@@ -355,7 +424,7 @@ extern "C" int setup_ui_run(Settings *s) {
         const bool sub_busy = subjob.state == SubJob::RUNNING;
         // Tabs; Play/Quit stay below them. The console only needs language.
 #ifdef __SWITCH__
-        const float footer = 118.0f;
+        const float footer = 138.0f;
 #else
         const float footer = 64.0f;
 #endif
@@ -444,6 +513,78 @@ extern "C" int setup_ui_run(Settings *s) {
 
         // Language
         ImGui::SeparatorText(tr("Language"));
+#ifdef __SWITCH__
+        {
+            /* One card per setting: label left, value right. Tap the card or
+             * press A on it to pick, exactly like the console's settings. */
+            auto switch_row = [](const char *id, const char *label, const std::vector<PackOption> &opts,
+                                 const char *current, char *code, size_t cap, float width) {
+                ImGui::PushID(id);
+                const float row_h = 84.0f;
+                const ImVec2 p = ImGui::GetCursorScreenPos();
+                const bool pressed = ImGui::InvisibleButton("##row", ImVec2(width, row_h)) || ImGui::IsItemActivated();
+                const bool hovered = ImGui::IsItemHovered();
+                ImDrawList *dl = ImGui::GetWindowDrawList();
+                const bool open = ImGui::IsPopupOpen("##pick");
+                dl->AddRectFilled(p, ImVec2(p.x + width, p.y + row_h),
+                                  (open || hovered) ? IM_COL32(0, 158, 227, 36) : IM_COL32(243, 243, 245, 255),
+                                  14.0f);
+                const float ty = p.y + (row_h - ImGui::GetTextLineHeight()) * 0.5f;
+                dl->AddText(ImVec2(p.x + 28, ty), IM_COL32(28, 28, 30, 255), label);
+                const char *shown = current;
+                for (auto &o : opts) {
+                    if (o.code == current) shown = o.label.c_str();
+                }
+                const ImVec2 ts = ImGui::CalcTextSize(shown);
+                dl->AddText(ImVec2(p.x + width - ts.x - 52, ty), IM_COL32(0, 118, 188, 255), shown);
+                const float cx = p.x + width - 26, cy = p.y + row_h * 0.5f;
+                dl->AddTriangleFilled(ImVec2(cx - 7, cy - 4), ImVec2(cx + 7, cy - 4), ImVec2(cx, cy + 5),
+                                      IM_COL32(0, 118, 188, 255));
+                if (pressed) {
+                    ImGui::OpenPopup("##pick");
+                }
+                bool changed = false;
+                ImGui::SetNextWindowSize(ImVec2(width * 0.6f, 0), ImGuiCond_Appearing);
+                if (ImGui::BeginPopup("##pick")) {
+                    for (auto &o : opts) {
+                        if (ImGui::Selectable(o.label.c_str(), o.code == current, 0, ImVec2(0, 52))) {
+                            snprintf(code, cap, "%s", o.code.c_str());
+                            changed = true;
+                            ImGui::CloseCurrentPopup();
+                        }
+                    }
+                    ImGui::EndPopup();
+                }
+                ImGui::PopID();
+                return changed;
+            };
+
+            /* Leave the right-hand column for the artwork. */
+            const float avail = ImGui::GetContentRegionAvail().x;
+            const float art = avail > 900.0f ? 360.0f : 0.0f;
+            const float row_w = avail - art;
+
+            std::vector<PackOption> ui_opts = {
+                {"auto", tr("Auto (system)")}, {"zh", "简体中文"}, {"en", "English"}};
+            if (switch_row("ui", tr("Interface language"), ui_opts, s->ui_lang, s->ui_lang,
+                           sizeof s->ui_lang, row_w)) {
+                i18n_set_language(s->ui_lang);
+                lain_log("launcher: interface language %s", s->ui_lang);
+                text_langs = find_packs("lang", tr("Japanese (original)"));
+                voice_langs = find_packs("dub", tr("Japanese (original)"));
+            }
+            ImGui::Dummy(ImVec2(0, 4));
+            if (switch_row("text", tr("Text / subtitles"), text_langs, s->text_lang, s->text_lang,
+                           sizeof s->text_lang, row_w)) {
+                lain_log("launcher: text language %s", s->text_lang);
+            }
+            ImGui::Dummy(ImVec2(0, 4));
+            if (switch_row("voice", tr("Voices"), voice_langs, s->voice_lang, s->voice_lang,
+                           sizeof s->voice_lang, row_w)) {
+                lain_log("launcher: voice language %s", s->voice_lang);
+            }
+        }
+#else
         {
             const char *ui_codes[] = {"auto", "zh", "en"};
             const char *ui_labels[] = {tr("Auto (system)"), "简体中文", "English"};
@@ -480,6 +621,7 @@ extern "C" int setup_ui_run(Settings *s) {
         };
         lang_combo(tr("Text / subtitles"), text_langs, s->text_lang, sizeof s->text_lang);
         lang_combo(tr("Voices"), voice_langs, s->voice_lang, sizeof s->voice_lang);
+#endif
 
 #ifndef __SWITCH__
         // Subtitles are not part of this program: players fetch a published fan set
@@ -542,6 +684,18 @@ extern "C" int setup_ui_run(Settings *s) {
         ImGui::EndTabBar();
 #endif
 
+#ifdef __SWITCH__
+        /* Lain in the lower right, clear of the language cards. */
+        if (logo_tex) {
+            const ImVec2 wp = ImGui::GetWindowPos();
+            const ImVec2 ws = ImGui::GetWindowSize();
+            const float art = 300.0f;
+            const float ax = wp.x + ws.x - art - 56.0f;
+            const float ay = wp.y + ws.y - art - footer - 40.0f;
+            ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)logo_tex, ImVec2(ax, ay),
+                                                 ImVec2(ax + art, ay + art));
+        }
+#endif
         // Play
         ImGui::Separator();
         char p1[1024];
@@ -588,13 +742,21 @@ extern "C" int setup_ui_run(Settings *s) {
             ImGui::SameLine();
             ImGui::TextDisabled("%s", tr("Import disc 1 to play. Disc 2 is needed for Site B."));
         }
+#ifdef __SWITCH__
+        ImGui::Dummy(ImVec2(0, 2));
+        ImGui::TextDisabled("%s", tr("A Confirm    B Back    D-pad Select    Touch to tap"));
+#endif
 
         ImGui::End();
         ImGui::Render();
         int fbw, fbh;
         SDL_GL_GetDrawableSize(win, &fbw, &fbh);
         glViewport(0, 0, fbw, fbh);
+#if defined(__SWITCH__)
+        glClearColor(1.0f, 1.0f, 1.0f, 1);
+#else
         glClearColor(0.05f, 0.05f, 0.07f, 1);
+#endif
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         // Tests/docs: LAIN_SETUP_SCREENSHOT=<file.bmp> saves the launcher after a few frames and quits.

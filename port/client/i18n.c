@@ -55,6 +55,8 @@ static const Entry kEntries[] = {
     {"Render scale", "渲染倍率"},
     {"Auto", "自动"},
     {"(%d x %d internal)", "（内部 %d x %d）"},
+    {"A Confirm    B Back    D-pad Select    Touch to tap",
+     "A 确定    B 返回    方向键 选择    触摸屏 点按"},
     {"(window resolution; 1x = original pixels)", "（窗口分辨率；1x = 原始像素）"},
     {"VSync", "垂直同步"},
     {"Smooth motion (60 fps)", "平滑运动（60 fps）"},

@@ -53,6 +53,10 @@ docker run --rm \
         https://raw.githubusercontent.com/anthonyfok/fonts-wqy-microhei/master/wqy-microhei.ttc
     fi
     cp /src/fonts/LICENSE_*.txt /src/fonts/README-WQY.txt /tmp/pkg/Lain/fonts/ 2>/dev/null || true
+    # Launcher artwork (512x512 RGBA), drawn bottom-right of the setup screen.
+    if [ -f /src/assets/lain_logo.rgba ]; then
+      cp /src/assets/lain_logo.rgba /tmp/pkg/Lain/lain_logo.rgba
+    fi
     cp /src/LICENSE /tmp/pkg/Lain/LICENSE.txt
     cp -R /src/thirdparty /tmp/pkg/Lain/thirdparty
     # Optional subtitle/dub packs staged in port/packs/<code>/ (gitignored, so
