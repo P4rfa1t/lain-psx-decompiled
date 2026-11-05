@@ -20,6 +20,7 @@
 #include "libgte.h"
 #include "libgpu.h" /* before PsyX_public.h: it uses struct _RECT16 */
 #include "PsyX/PsyX_public.h"
+#include "PsyX/PsyX_logger.h"
 #ifndef __SWITCH__
 #include "PsyX/common/glad.h"
 #else
@@ -646,6 +647,26 @@ static void on_end_scene(void) {
         last_interp = interp_count;
         fflush(stdout);
     }
+#ifdef __SWITCH__
+    /* A line every 10 s: a hang or crash report shows the last point reached
+     * and whether the mixer was underrunning. */
+    {
+        static Uint32 last_beat;
+        static int last_beat_frame;
+        Uint32 beat_now = SDL_GetTicks();
+        if (beat_now - last_beat >= 10000) {
+            extern int g_vsync_counter;
+            const double secs = (beat_now - last_beat) / 1000.0;
+            const int frames = frame_count - last_beat_frame;
+            lain_log("heartbeat: frame %d, %.1f fps, vblank %d, audio %lld frames (%d underruns), %s",
+                     frame_count, secs > 0 ? frames / secs : 0.0, g_vsync_counter,
+                     LainSpu_OutputFrames(), LainSpu_Underruns(),
+                     inserted_disc ? "disc 2" : "disc 1");
+            last_beat = beat_now;
+            last_beat_frame = frame_count;
+        }
+    }
+#endif
     for (int i = 0; shot_path && i < shot_count; i++) {
         if (shot_frames[i] == frame_count) {
             char path[1024];
@@ -801,10 +822,12 @@ static int boot_game(const Settings *initial, const char *disc1, const char *dis
         return 1;
     }
     fprintf(stderr, "lain: arena loaded\n");
+    lain_log("arena loaded");
     int bad = port_data_relocate();
     if (bad != 0) {
         fprintf(stderr, "lain: %d pointer words outside PS1 RAM\n", bad);
     }
+    lain_log("relocate done, %d pointer words outside PS1 RAM", bad);
     /* Player mods: file tables in the arena and the disc reader (client/mods.cpp). */
     mods_apply(settings->mods, disc1, disc2);
     mods_apply_data(settings->mods);
@@ -817,9 +840,20 @@ static int boot_game(const Settings *initial, const char *disc1, const char *dis
      * overrides it without saving to settings.ini. */
     g_cfg_renderScale = getenv("LAIN_RENDER_SCALE") ? atoi(getenv("LAIN_RENDER_SCALE")) : settings->render_scale;
     fprintf(stderr, "lain: opening game window\n");
+    lain_log("opening game window %dx%d %s, render scale %d", settings->width, settings->height,
+             settings->fullscreen ? "fullscreen" : "windowed", g_cfg_renderScale);
     PsyX_Initialise("Serial Experiments Lain", settings->width, settings->height,
                     settings->fullscreen);
     fprintf(stderr, "lain: game window = %p\n", (void *)SDL_GL_GetCurrentWindow());
+    {
+        int dw = 0, dh = 0;
+        SDL_Window *gw = SDL_GL_GetCurrentWindow();
+        if (gw) {
+            SDL_GL_GetDrawableSize(gw, &dw, &dh);
+        }
+        lain_log("game window %p, drawable %dx%d, %s", (void *)gw, dw, dh,
+                 SDL_GetError()[0] ? SDL_GetError() : "no SDL error");
+    }
     if (!SDL_GL_GetCurrentWindow()) {
 #if defined(__SWITCH__)
         char msg[512];
@@ -883,6 +917,7 @@ static int boot_game(const Settings *initial, const char *disc1, const char *dis
     /* Stop the CD drive thread before the process tears down (it runs game callbacks). */
     atexit(LainCD_Shutdown);
     fprintf(stderr, "lain: starting game\n");
+    lain_log("starting game: %s", disc == disc2 ? "disc 2" : "disc 1");
     lain_game_main(); /* never returns */
     return 0;
 }
@@ -902,8 +937,8 @@ static void switch_log_init(void) {
 int main(int argc, char **argv) {
 #ifdef __SWITCH__
     switch_log_init();
-    fprintf(stderr, "lain: main start\n");
 #endif
+    lain_log("lain start (built %s %s)", __DATE__, __TIME__);
     /* `lain --make-subtitle-pack <code> [name]`: template SRT files for translators. */
     if (argc >= 3 && strcmp(argv[1], "--make-subtitle-pack") == 0) {
         char d1[1024], d2[1024], dir[1100], base[1100];
@@ -967,10 +1002,14 @@ int main(int argc, char **argv) {
     Settings settings;
     settings_load(&settings);
     i18n_set_language(settings.ui_lang);
+    lain_log("settings: %dx%d %s, render scale %d, vsync %d, smooth %d, ui %s, text %s, voice %s",
+             settings.width, settings.height, settings.fullscreen ? "fullscreen" : "windowed",
+             settings.render_scale, settings.vsync, settings.smooth, settings.ui_lang,
+             settings.text_lang, settings.voice_lang);
 #ifdef __SWITCH__
     /* Use disc images already on the SD card (no 1.3 GB copy, no import step). */
     discs_auto_setup(settings_data_dir());
-    fprintf(stderr, "lain: disc setup done\n");
+    lain_log("disc scan done");
 #endif
 
     /* `lain --play`: skip the launcher and boot with the saved settings/discs. */
@@ -978,9 +1017,9 @@ int main(int argc, char **argv) {
 
     /* The launcher is also where discs get imported. */
     if (!play) {
-        fprintf(stderr, "lain: launcher start\n");
+        lain_log("launcher start");
         int ok = setup_ui_run(&settings);
-        fprintf(stderr, "lain: launcher result %d\n", ok);
+        lain_log("launcher result %d", ok);
         if (!ok) {
             SDL_Quit();
             return 0;
@@ -992,6 +1031,8 @@ int main(int argc, char **argv) {
     int have2 = discs_imported(settings_data_dir(), DISC_2, disc2, sizeof disc2);
     printf("data dir: %s\ndisc 1: %s\ndisc 2: %s\n", settings_data_dir(),
            have1 ? disc1 : "(missing)", have2 ? disc2 : "(missing)");
+    lain_log("data dir %s; disc 1 %s; disc 2 %s", settings_data_dir(), have1 ? disc1 : "(missing)",
+             have2 ? disc2 : "(missing)");
     printf("display: %s %dx%d, render scale %dx; text %s, voices %s\n",
            settings.fullscreen ? "fullscreen" : "windowed", settings.width, settings.height,
            settings.render_scale, settings.text_lang, settings.voice_lang);
@@ -1001,6 +1042,14 @@ int main(int argc, char **argv) {
         return 1;
     }
     /* The launcher's window is gone; PsyCross opens the game window. */
+#ifndef __SWITCH__
     SDL_Quit();
-    return boot_game(&settings, disc1, have2 ? disc2 : NULL);
+#endif
+    /* On the Switch SDL_Quit also tears down EGL/libnx state the game window
+     * needs; the subsystems stay up for the rest of the session. */
+    int rc = boot_game(&settings, disc1, have2 ? disc2 : NULL);
+#ifdef __SWITCH__
+    fprintf(stderr, "lain: game returned %d\n", rc);
+#endif
+    return rc;
 }

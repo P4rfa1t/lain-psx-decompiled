@@ -9,6 +9,7 @@
  */
 #include "spu_internal.h"
 #include "psx/libspu.h"
+#include "PsyX/PsyX_logger.h"
 
 #include <SDL.h>
 #include <stdlib.h>
@@ -24,6 +25,18 @@ static SDL_AudioDeviceID s_dev;
 /* The Switch audout backend runs at 48 kHz; convert from the SPU's 44.1 kHz. */
 static SDL_AudioStream *s_conv;
 static int s_dev_rate;
+static long long s_out_frames;
+static int s_underruns;
+
+long long LainSpu_OutputFrames(void)
+{
+    return s_out_frames;
+}
+
+int LainSpu_Underruns(void)
+{
+    return s_underruns;
+}
 static short *s_mix;
 static int s_mix_frames;
 static int s_output_enabled = 1;
@@ -743,16 +756,23 @@ void LainSpu_SetOutputEnabled(int on)
 static void SDLCALL audio_cb(void *user, Uint8 *stream, int len)
 {
     (void)user;
+    s_out_frames += len / 4;
     if (!s_conv || !s_mix) {
         LainSpu_Render((short *)stream, len / 4);
         return;
     }
-    int out_frames = len / 4;
-    long long need = ((long long)out_frames * LSPU_RATE + s_dev_rate - 1) / s_dev_rate + 8;
-    if (need > s_mix_frames)
-        need = s_mix_frames;
-    LainSpu_Render(s_mix, (int)need);
-    SDL_AudioStreamPut(s_conv, s_mix, (int)need * 4);
+    /* Render only what the stream is missing. Top up by a fixed amount every
+     * callback and the backlog grows without bound (latency creeps up until the
+     * game's video and audio no longer line up); rendering only the deficit
+     * keeps the buffer at whatever the device asks for. */
+    int avail = SDL_AudioStreamAvailable(s_conv);
+    if (avail < len) {
+        long long need = ((long long)(len - avail) * LSPU_RATE + s_dev_rate - 1) / s_dev_rate + 8;
+        if (need > s_mix_frames)
+            need = s_mix_frames;
+        LainSpu_Render(s_mix, (int)need);
+        SDL_AudioStreamPut(s_conv, s_mix, (int)need * 4);
+    }
     int got = 0;
     while (got < len) {
         int n = SDL_AudioStreamGet(s_conv, stream + got, len - got);
@@ -761,6 +781,7 @@ static void SDLCALL audio_cb(void *user, Uint8 *stream, int len)
         got += n;
     }
     if (got < len) {
+        s_underruns++;
         memset(stream + got, 0, (size_t)(len - got));
     }
 }
@@ -781,24 +802,44 @@ void LSpu_OpenOutput(void)
     want.freq = LSPU_RATE;
     want.format = AUDIO_S16SYS;
     want.channels = 2;
-    want.samples = 512;
+    want.samples = 1024;
+#if defined(__SWITCH__)
+    /* The console's audio thread has to finish the SPU mix inside the callback;
+     * 1024 frames (~21 ms) underran and crackled. */
+    want.samples = 4096;
+#endif
     want.callback = audio_cb;
-    s_dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+    /* Prefer the exact SPU rate so no resampling is needed. */
+    s_dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+    if (!s_dev) {
+        s_dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+    }
     if (!s_dev) {
         fprintf(stderr, "lain_snd: no audio device: %s\n", SDL_GetError());
         return;
     }
     s_dev_rate = have.freq > 0 ? have.freq : LSPU_RATE;
-    if (s_dev_rate != LSPU_RATE) {
-        s_conv = SDL_NewAudioStream(AUDIO_S16SYS, 2, LSPU_RATE, AUDIO_S16SYS, 2, s_dev_rate);
-    }
-    s_mix_frames = (have.samples > 0 ? have.samples : 512) + 128;
+    s_mix_frames = 8192;
     s_mix = (short *)malloc((size_t)s_mix_frames * 4);
     if (!s_mix) {
         SDL_CloseAudioDevice(s_dev);
         s_dev = 0;
         return;
     }
+    if (s_dev_rate != LSPU_RATE) {
+        s_conv = SDL_NewAudioStream(AUDIO_S16SYS, 2, LSPU_RATE, AUDIO_S16SYS, 2, s_dev_rate);
+        if (s_conv) {
+            /* Pre-fill with silence so the first callbacks don't underrun. */
+            short zeros[4096];
+            memset(zeros, 0, sizeof zeros);
+            SDL_AudioStreamPut(s_conv, zeros, sizeof zeros);
+        } else {
+            fprintf(stderr, "lain_snd: resampler unavailable (%d -> %d Hz)\n", LSPU_RATE, s_dev_rate);
+        }
+    }
+    fprintf(stderr, "lain_snd: device %d Hz, %d frames\n", s_dev_rate, have.samples);
+    lain_log("audio: device %d Hz, %d frames, resampling %s", s_dev_rate, have.samples,
+             s_dev_rate == LSPU_RATE ? "no" : (s_conv ? "yes" : "FAILED"));
     SDL_PauseAudioDevice(s_dev, 0);
 }
 

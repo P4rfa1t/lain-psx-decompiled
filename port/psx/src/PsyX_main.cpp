@@ -406,6 +406,12 @@ FILE* g_logStream = NULL;
 // intialise logging
 void PsyX_Log_Initialise()
 {
+#ifdef __SWITCH__
+	/* main.c redirects stdout to sdmc:/switch/lain/lain.log, so Psy-X's own
+	 * printf output already lands there; a second log file would only split it. */
+	g_logStream = NULL;
+	return;
+#endif
 	char appLogFilename[128];
 	sprintf(appLogFilename, "%s.log", g_appNameStr);
 

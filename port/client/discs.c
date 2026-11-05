@@ -10,6 +10,7 @@
 #endif
 
 #include "sha1.h"
+#include "PsyX/PsyX_logger.h"
 
 #define RAW_SECTOR 2352
 #define COPY_CHUNK (RAW_SECTOR * 256)
@@ -231,7 +232,8 @@ static int import_thread(void *p) {
         }
     }
     if (job->disc == DISC_UNKNOWN) {
-        job->disc = discs_identify_by_contents(tmp);
+        /* In place nothing was written to tmp: identify the image itself. */
+        job->disc = discs_identify_by_contents(in_place ? bin : tmp);
     }
     if (job->disc == DISC_UNKNOWN) {
         if (out) {
@@ -338,6 +340,7 @@ int discs_auto_setup(const char *data_dir) {
         discs_imported(data_dir, DISC_2, p, sizeof p)) {
         return 0;
     }
+    lain_log("disc scan: looking in %sdiscs/", data_dir);
     char discs_dir[1024], root[1024];
     snprintf(discs_dir, sizeof discs_dir, "%sdiscs", data_dir);
     snprintf(root, sizeof root, "%s", data_dir);
@@ -349,7 +352,8 @@ int discs_auto_setup(const char *data_dir) {
         }
         struct dirent *e;
         while ((e = readdir(dh))) {
-            if (!ends_with_ci(e->d_name, ".cue") && !ends_with_ci(e->d_name, ".img")) {
+            const int is_cue = ends_with_ci(e->d_name, ".cue");
+            if (!is_cue && !ends_with_ci(e->d_name, ".img") && !ends_with_ci(e->d_name, ".bin")) {
                 continue;
             }
             char path[1200];
@@ -358,9 +362,16 @@ int discs_auto_setup(const char *data_dir) {
             if (discs_resolve_track(path, bin, sizeof bin, err, sizeof err) == 0) {
                 int disc = discs_identify_by_contents(bin);
                 if (disc == DISC_1 || disc == DISC_2) {
+                    lain_log("disc scan: %s is disc %d", bin, disc);
                     write_link(data_dir, disc, bin);
                     continue;
                 }
+            }
+            /* A bare .bin may be an audio track or a save file: don't spend
+             * minutes hashing it. A .cue/.img that can't be identified gets the
+             * full import, which verifies the dump and reports why. */
+            if (!is_cue && !ends_with_ci(e->d_name, ".img")) {
+                continue;
             }
             ImportJob job;
             discs_import_start(&job, path, data_dir);
@@ -369,6 +380,12 @@ int discs_auto_setup(const char *data_dir) {
             }
         }
         closedir(dh);
+    }
+    {
+        char a[1024], b[1024];
+        const int got1 = discs_imported(data_dir, DISC_1, a, sizeof a);
+        const int got2 = discs_imported(data_dir, DISC_2, b, sizeof b);
+        lain_log("disc scan: disc 1 %s, disc 2 %s", got1 ? a : "missing", got2 ? b : "missing");
     }
     return 0;
 }

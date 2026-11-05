@@ -9,6 +9,9 @@ extern "C" {
 union SDL_Event;
 void lain_touch_to_imgui(const union SDL_Event *ev, float display_w, float display_h);
 
+/* Feeds the Switch's pads and touch panel to Dear ImGui. No-op off the console. */
+void lain_switch_input_feed(float display_w, float display_h);
+
 #ifdef __cplusplus
 }
 #endif

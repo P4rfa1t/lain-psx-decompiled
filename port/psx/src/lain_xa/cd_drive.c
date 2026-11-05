@@ -108,6 +108,11 @@ static void cd_start(void)
         s_cd.started = 1;
         s_cd.quit = 0;
         s_cd.thread = SDL_CreateThread(cd_thread, "LainCD", NULL);
+        if (!s_cd.thread)
+        {
+            fprintf(stderr, "lain_cd: could not start the drive thread: %s\n", SDL_GetError());
+            s_cd.started = 0;
+        }
     }
     SDL_UnlockMutex(s_cd.mu);
 }

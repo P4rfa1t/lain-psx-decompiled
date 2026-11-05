@@ -131,6 +131,15 @@ static void set_menu(bool open) {
 
 extern "C" int overlay_handle_event(const union SDL_Event *ev) {
     const SDL_Event *e = (const SDL_Event *)ev;
+    /* On the Switch the pad reaches ImGui through lain_switch_input_feed with
+     * Nintendo semantics; SDL's positional mapping would flip A/B there. */
+    const bool pad_to_imgui =
+#ifdef __SWITCH__
+        e->type != SDL_CONTROLLERBUTTONDOWN && e->type != SDL_CONTROLLERBUTTONUP &&
+        e->type != SDL_CONTROLLERAXISMOTION;
+#else
+        true;
+#endif
     if (e->type == SDL_MOUSEMOTION) {
         s_mouse_moved_at = SDL_GetPerformanceCounter();
     }
@@ -161,7 +170,8 @@ extern "C" int overlay_handle_event(const union SDL_Event *ev) {
     if (!s_menu) {
         /* Releases still go to the menu, so a key held when it closed isn't stuck down
          * the next time it opens. */
-        if (s_ready && (e->type == SDL_KEYUP || e->type == SDL_MOUSEBUTTONUP || e->type == SDL_CONTROLLERBUTTONUP)) {
+        if (s_ready && pad_to_imgui &&
+            (e->type == SDL_KEYUP || e->type == SDL_MOUSEBUTTONUP || e->type == SDL_CONTROLLERBUTTONUP)) {
             ImGui_ImplSDL2_ProcessEvent(e);
         }
         return 0;
@@ -170,7 +180,7 @@ extern "C" int overlay_handle_event(const union SDL_Event *ev) {
         set_menu(false);
         return 1;
     }
-    if (s_ready) {
+    if (s_ready && pad_to_imgui) {
         ImGui_ImplSDL2_ProcessEvent(e);
     }
     /* Keyboard, mouse and text go to the menu; window and device events still
@@ -518,6 +528,7 @@ extern "C" void overlay_draw(void) {
     }
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
+    lain_switch_input_feed(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
     ImGui::NewFrame();
 
     const ImGuiViewport *vp = ImGui::GetMainViewport();

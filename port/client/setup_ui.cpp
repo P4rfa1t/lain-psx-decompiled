@@ -21,6 +21,7 @@
 #include "i18n.h"
 #include "ui_font.h"
 #include "touch.h"
+#include "PsyX/PsyX_logger.h"
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl2.h"
@@ -219,32 +220,6 @@ void gallery_draw(Gallery &g) {
 
 }  // namespace
 
-#ifdef __SWITCH__
-/* No native file dialog on the console: import every .cue found on the SD card. */
-static void scan_sdmc_discs(std::vector<std::string> &queue) {
-    const char *dirs[] = {"sdmc:/switch/lain/discs", "sdmc:/switch/lain"};
-    for (const char *dir : dirs) {
-        DIR *d = opendir(dir);
-        if (!d) {
-            continue;
-        }
-        struct dirent *e;
-        while ((e = readdir(d))) {
-            const char *n = e->d_name;
-            size_t len = strlen(n);
-            if (len > 4 && (SDL_strcasecmp(n + len - 4, ".cue") == 0 ||
-                            SDL_strcasecmp(n + len - 4, ".bin") == 0 ||
-                            SDL_strcasecmp(n + len - 4, ".img") == 0)) {
-                char p[1024];
-                snprintf(p, sizeof p, "%s/%s", dir, n);
-                queue.push_back(p);
-            }
-        }
-        closedir(d);
-    }
-}
-#endif
-
 extern "C" int setup_ui_run(Settings *s) {
 #ifdef __SWITCH__
     /* No display controls on the console: fullscreen, 2x internal resolution. */
@@ -299,7 +274,13 @@ extern "C" int setup_ui_run(Settings *s) {
     ImGui::GetStyle().WindowRounding = 0;
     ImGui_ImplSDL2_InitForOpenGL(win, gl);
     ImGui_ImplOpenGL3_Init(glsl);
+#if defined(__SWITCH__)
+    // 720p on a 6.2" screen: 18 px is unreadable at arm's length.
+    ui_font_load(30.0f);
+    ImGui::GetStyle().ScaleAllSizes(30.0f / 18.0f);
+#else
     ui_font_load(18.0f);
+#endif
 
     std::vector<PackOption> text_langs = find_packs("lang", tr("Japanese (original)"));
     std::vector<PackOption> voice_langs = find_packs("dub", tr("Japanese (original)"));
@@ -318,10 +299,20 @@ extern "C" int setup_ui_run(Settings *s) {
     while (result < 0) {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
+            /* On the Switch the pad is fed below from libnx with Nintendo
+             * semantics (A = confirm). SDL would add the Xbox-positional
+             * mapping on top of it (its B button is the bottom one, so it
+             * would flip confirm/cancel), so its pad events are dropped. */
+#ifdef __SWITCH__
+            if (ev.type != SDL_CONTROLLERBUTTONDOWN && ev.type != SDL_CONTROLLERBUTTONUP &&
+                ev.type != SDL_CONTROLLERAXISMOTION)
+#endif
             ImGui_ImplSDL2_ProcessEvent(&ev);
+#ifndef __SWITCH__
             if (ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP) {
                 lain_touch_to_imgui(&ev, io.DisplaySize.x, io.DisplaySize.y);
             }
+#endif
             if (ev.type == SDL_QUIT) {
                 result = 0;
             } else if (ev.type == SDL_DROPFILE) {
@@ -340,6 +331,7 @@ extern "C" int setup_ui_run(Settings *s) {
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
+        lain_switch_input_feed(io.DisplaySize.x, io.DisplaySize.y);
         ImGui::NewFrame();
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(io.DisplaySize);
@@ -361,8 +353,12 @@ extern "C" int setup_ui_run(Settings *s) {
             subjob.state = SubJob::IDLE;
         }
         const bool sub_busy = subjob.state == SubJob::RUNNING;
-        // Tabs; Play/Quit stay below them. The console only needs discs and language.
+        // Tabs; Play/Quit stay below them. The console only needs language.
+#ifdef __SWITCH__
+        const float footer = 118.0f;
+#else
         const float footer = 64.0f;
+#endif
 #ifdef __SWITCH__
         const bool setup_tab = true;
         ImGui::BeginChild("setup_page", ImVec2(0, -footer));
@@ -374,23 +370,13 @@ extern "C" int setup_ui_run(Settings *s) {
         }
 #endif
         if (setup_tab) {
+#ifndef __SWITCH__
         // Discs
         ImGui::SeparatorText(tr("Discs"));
         ImGui::Text(tr("Disc 1 (Site A): %s"), tr(disc_status(DISC_1)));
         ImGui::Text(tr("Disc 2 (Site B): %s"), tr(disc_status(DISC_2)));
-#ifdef __SWITCH__
-        ImGui::TextDisabled(tr("Disc folder: %sdiscs/"), settings_data_dir());
-        if (ImGui::Button(tr("Rescan discs"))) {
-            discs_auto_setup(settings_data_dir());
-            last_message = tr("Disc scan finished.");
-        }
-        ImGui::SameLine();
-#endif
         ImGui::BeginDisabled(busy);
         if (ImGui::Button(tr("Add disc..."))) {
-#ifdef __SWITCH__
-            scan_sdmc_discs(queue);
-#else
             const char *filters[] = {"*.cue", "*.bin", "*.img"};
             const char *picked = tinyfd_openFileDialog(tr("Choose a Serial Experiments Lain disc"), "", 3, filters,
                                                        tr("Disc image (.cue, .bin, .img)"), 1);
@@ -404,7 +390,6 @@ extern "C" int setup_ui_run(Settings *s) {
                 }
                 queue.push_back(all.substr(start));
             }
-#endif
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
@@ -414,6 +399,7 @@ extern "C" int setup_ui_run(Settings *s) {
         } else if (!last_message.empty()) {
             ImGui::TextWrapped("%s", last_message.c_str());
         }
+#endif
 
 #ifndef __SWITCH__
         // Display
@@ -470,6 +456,7 @@ extern "C" int setup_ui_run(Settings *s) {
                     if (ImGui::Selectable(ui_labels[i], cur_ui == i)) {
                         snprintf(s->ui_lang, sizeof s->ui_lang, "%s", ui_codes[i]);
                         i18n_set_language(s->ui_lang);
+                        lain_log("launcher: interface language %s", ui_codes[i]);
                         text_langs = find_packs("lang", tr("Japanese (original)"));
                         voice_langs = find_packs("dub", tr("Japanese (original)"));
                     }
@@ -560,13 +547,33 @@ extern "C" int setup_ui_run(Settings *s) {
         char p1[1024];
         bool have_disc1 = discs_imported(settings_data_dir(), DISC_1, p1, sizeof p1);
         ImGui::BeginDisabled(busy || sub_busy);
-        if (ImGui::Button(tr("Play game"), ImVec2(160, 40))) {
+#ifdef __SWITCH__
+        const ImVec2 play_size(280, 64), quit_size(160, 64);
+#else
+        const ImVec2 play_size(160, 40), quit_size(100, 40);
+#endif
+        if (ImGui::Button(tr("Play game"), play_size)) {
+#ifdef __SWITCH__
+            if (!have_disc1) {
+                // The console has no disc browser: scan the folder again so a disc
+                // dropped in while the launcher was open is found on this press.
+                discs_auto_setup(settings_data_dir());
+                have_disc1 = discs_imported(settings_data_dir(), DISC_1, p1, sizeof p1);
+            }
+#endif
             if (!have_disc1) {
                 char miss[512];
+#ifdef __SWITCH__
+                snprintf(miss, sizeof miss, tr("Disc 1 not found: put your .img in %sdiscs/."),
+                         settings_data_dir());
+#else
                 snprintf(miss, sizeof miss, tr("Disc 1 not found: put .cue/.bin/.img in %sdiscs/ and press Rescan discs."),
                          settings_data_dir());
+#endif
                 last_message = miss;
+                lain_log("launcher: play with no disc 1");
             } else {
+                lain_log("launcher: play (text %s, voice %s)", s->text_lang, s->voice_lang);
                 s->setup_done = 1;
                 settings_save(s);
                 result = 1;
@@ -574,7 +581,7 @@ extern "C" int setup_ui_run(Settings *s) {
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
-        if (ImGui::Button(tr("Quit"), ImVec2(100, 40))) {
+        if (ImGui::Button(tr("Quit"), quit_size)) {
             result = 0;
         }
         if (!have_disc1) {

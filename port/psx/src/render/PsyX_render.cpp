@@ -1,4 +1,5 @@
 #include "PsyX/PsyX_public.h"
+#include "PsyX/PsyX_logger.h"
 #include "lain_hd.h" // lain
 #include <math.h> /* lain: sinf/cosf (not pulled in transitively on MinGW) */
 
@@ -201,6 +202,21 @@ int PBO_Init(GrPBO* pbo, GLenum format, int w, int h, int num)
 	}
 
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+#else
+	/* No PBOs on this platform, but the CPU readback buffer is still needed. */
+	if (GL_RGBA == pbo->fmt || GL_BGRA == pbo->fmt) {
+		pbo->nbytes = pbo->width * pbo->height * 4;
+	} else if (GL_RGB == pbo->fmt || GL_BGR == pbo->fmt) {
+		pbo->nbytes = pbo->width * pbo->height * 3;
+	} else {
+		eprinterr("Unhandled pixel format for readback.");
+		return -3;
+	}
+	if (pbo->nbytes <= 0) {
+		eprinterr("Invalid width or height given: %d x %d", pbo->width, pbo->height);
+		return -4;
+	}
+	pbo->pixels = (u_char*)malloc(pbo->nbytes);
 #endif
 	return 0;
 }
@@ -282,7 +298,7 @@ void PBO_Download(GrPBO* pbo)
 
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 #else
-	// No PBO: read the currently bound framebuffer straight into the CPU buffer.
+	// No PBO: read the currently bound read framebuffer straight into the CPU buffer.
 	glReadPixels(0, 0, pbo->width, pbo->height, pbo->fmt, GL_UNSIGNED_BYTE, pbo->pixels);
 	pbo->num_downloads++;
 #endif
@@ -309,6 +325,9 @@ int GR_InitialiseGLContext(char* windowName, int fullscreen)
 
 #if defined(__ANDROID__)
 	windowFlags |= SDL_WINDOW_FULLSCREEN;
+#elif defined(__SWITCH__)
+	// libnx has one display mode; there is nothing to switch to.
+	windowFlags |= SDL_WINDOW_FULLSCREEN;
 #else
 	if (fullscreen)
 		windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP; // lain: no display mode switch
@@ -316,6 +335,18 @@ int GR_InitialiseGLContext(char* windowName, int fullscreen)
 
 	if(g_windowWidth <= 0 || g_windowHeight <= 0)
 		windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+
+#if defined(__SWITCH__)
+	// Must be set before the window exists: the EGL config is chosen at creation.
+	// An RGBA8 backbuffer is required for glBlitFramebuffer format compatibility
+	// with the RGBA8 screen/offscreen targets. Leave depth/stencil at SDL's
+	// defaults: the window only ever receives the finished 2D frame.
+	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+#endif
 
 	g_window = SDL_CreateWindow(windowName, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_windowWidth, g_windowHeight, windowFlags);
 
@@ -376,6 +407,12 @@ int GR_InitialiseGLContext(char* windowName, int fullscreen)
 		return 0;
 	}
 #endif
+
+	{
+		int dw = 0, dh = 0;
+		SDL_GL_GetDrawableSize(g_window, &dw, &dh);
+		lain_log("window %p %dx%d, drawable %dx%d", (void *)g_window, g_windowWidth, g_windowHeight, dw, dh);
+	}
 
 	return 1;
 }
@@ -500,7 +537,10 @@ static void GR_UpdateScreenTarget()
 	glBindFramebuffer(GL_FRAMEBUFFER, g_screenFramebuffer);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_screenColor, 0);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, s_screenDepth);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	GLenum screenStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	lain_log("screen framebuffer %dx%d: 0x%04X%s", w, h, screenStatus,
+	         screenStatus == GL_FRAMEBUFFER_COMPLETE ? " (complete)" : " (INCOMPLETE)");
+	if (screenStatus != GL_FRAMEBUFFER_COMPLETE)
 		eprinterr("screen framebuffer incomplete (%dx%d)\n", w, h);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
@@ -1283,6 +1323,8 @@ int GR_InitialisePSX()
 	GR_InitRG8LUT();
 	GR_GenerateCommonTextures();
 	GR_InitialisePSXShaders();
+	lain_log("renderer: GLES %d, PBO %d, offscreen blit %d, framebuffer blit %d, VRAM %dx%d",
+	         OGLES_VERSION, USE_PBO, USE_OFFSCREEN_BLIT, USE_FRAMEBUFFER_BLIT, VRAM_WIDTH, VRAM_HEIGHT);
 
 #if USE_OPENGL
 	glDepthFunc(GL_LEQUAL);
@@ -1804,7 +1846,7 @@ void GR_CopyRGBAFramebufferToVRAM(u_int* src, int x, int y, int w, int h, int up
 	assert(x >= 0);
 	assert(y >= 0);
 	assert(x + w <= VRAM_WIDTH);
-	assert(y + h <= VRAM_WIDTH);
+	assert(y + h <= VRAM_HEIGHT);
 
 	ushort* fb = (ushort*)malloc(w * h * sizeof(ushort));
 	uint* data_src = (uint*)src;
@@ -1821,7 +1863,7 @@ void GR_CopyRGBAFramebufferToVRAM(u_int* src, int x, int y, int w, int h, int up
 			u_char r = ((c >> 19) & 0x1F);
 			//u_char a = ((c >> 24) & 0x1F);
 
-			int a = r == g == b == 0 ? 0 : 1;
+			int a = (r | g | b) == 0 ? 0 : 1;
 
 			*data_dst++ = r | (g << 5) | (b << 10) | (a << 15);
 		}
@@ -1866,13 +1908,20 @@ void GR_ReadFramebufferDataToVRAM()
 
 	// now we can read it back to VRAM texture
 
-#if USE_OPENGL && defined(USE_PBO)
+#if USE_OPENGL
 	// read the texture
 	if(g_glFramebufferPBO.pixels)
 	{
+#if USE_PBO
 		glBindTexture(GL_TEXTURE_2D, g_fbTexture);
 		PBO_Download(&g_glFramebufferPBO);
 		glBindTexture(GL_TEXTURE_2D, 0);
+#else
+		/* g_fbTexture holds the 4:3 view (blitted in GR_StoreFrameBuffer). */
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, g_glBlitFramebuffer);
+		glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, g_glFramebufferPBO.pixels);
+		glBindFramebuffer(GL_FRAMEBUFFER, g_screenFramebuffer);
+#endif
 		GR_CopyRGBAFramebufferToVRAM((u_int*)g_glFramebufferPBO.pixels, x, y, w, h, 0, 0);
 	}
 #endif
@@ -1931,12 +1980,13 @@ void GR_SetOffscreenState(const RECT16* offscreenRect, int enable)
 	if (enable)
 	{
 		// set storage size first
-		if (g_PreviousOffscreen.w != offscreenRect->w &&
+		if (g_PreviousOffscreen.w != offscreenRect->w ||
 			g_PreviousOffscreen.h != offscreenRect->h)
 		{
 			glBindTexture(GL_TEXTURE_2D, g_offscreenRTTexture);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, offscreenRect->w, offscreenRect->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 			glBindTexture(GL_TEXTURE_2D, 0);
+			g_lastBoundTexture = -1;
 		}
 
 		g_PreviousOffscreen = *offscreenRect;
@@ -1981,15 +2031,20 @@ void GR_SetOffscreenState(const RECT16* offscreenRect, int enable)
 		glBindFramebuffer(GL_FRAMEBUFFER, g_screenFramebuffer);
 		// copy rendering results to VRAM texture
 		{
-			// reat the texture
+#if USE_PBO
+			// read the texture
 			glBindTexture(GL_TEXTURE_2D, g_offscreenRTTexture);
-			//glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 			PBO_Download(&g_glOffscreenPBO);
 			glBindTexture(GL_TEXTURE_2D, g_lastBoundTexture);
-
-			// Don't forcely update VRAM
-			GR_CopyRGBAFramebufferToVRAM((u_int*)g_glOffscreenPBO.pixels, 
-				g_PreviousOffscreen.x, g_PreviousOffscreen.y, g_PreviousOffscreen.w, g_PreviousOffscreen.h, 
+#else
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, g_glOffscreenFramebuffer);
+			glReadPixels(0, 0, g_PreviousOffscreen.w, g_PreviousOffscreen.h, GL_RGBA, GL_UNSIGNED_BYTE,
+			             g_glOffscreenPBO.pixels);
+			glBindFramebuffer(GL_FRAMEBUFFER, g_screenFramebuffer);
+#endif
+			// Don't forcibly update VRAM
+			GR_CopyRGBAFramebufferToVRAM((u_int*)g_glOffscreenPBO.pixels,
+				g_PreviousOffscreen.x, g_PreviousOffscreen.y, g_PreviousOffscreen.w, g_PreviousOffscreen.h,
 				USE_OFFSCREEN_BLIT == 0, 1);
 		}
 
@@ -2014,9 +2069,21 @@ void GR_StoreFrameBuffer(int x, int y, int w, int h)
 	g_PreviousFramebuffer.w = w;
 	g_PreviousFramebuffer.h = h;
 
+#if !USE_FRAMEBUFFER_BLIT
+	/* No GPU blit into the RG8 VRAM texture: put the 4:3 view into the RGBA8
+	 * g_fbTexture, which GR_ReadFramebufferDataToVRAM reads on the CPU. */
+	{
+		int vx, vy, vw, vh;
+		GR_GetViewRect(&vx, &vy, &vw, &vh);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, g_screenFramebuffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g_glBlitFramebuffer);
+		glBlitFramebuffer(vx, vy, vx + vw, vy + vh, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		glBindFramebuffer(GL_FRAMEBUFFER, g_screenFramebuffer);
+	}
+#endif
+
 #if USE_FRAMEBUFFER_BLIT
 	glBindFramebuffer(GL_FRAMEBUFFER, g_glBlitFramebuffer);
-
 	// before drawing set source and target
 	{
 		// setup draw and read framebuffers
@@ -2127,7 +2194,7 @@ void GR_UpdateVRAM()
 // frame with the display area of VRAM (15-bit, or 24-bit for movies).
 void GR_DrawVRAMBackground(int x, int y, int w, int h, int rgb24)
 {
-#if USE_OPENGL && USE_FRAMEBUFFER_BLIT
+#if USE_OPENGL
 	static GLuint tex = 0, fbo = 0;
 	static u_int* rgba = NULL;
 	static int texW = 0, texH = 0;
@@ -2211,6 +2278,13 @@ void GR_DrawVRAMBackground(int x, int y, int w, int h, int rgb24)
 void GR_SwapWindow()
 {
 #if defined(RENDERER_OGL) || defined(RENDERER_OGLES)
+	{
+		static int first = 1;
+		if (first) {
+			first = 0;
+			lain_log("first frame presented");
+		}
+	}
 	SDL_GL_SwapWindow(g_window);
 #endif
 

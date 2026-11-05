@@ -36,6 +36,8 @@ static const Entry kEntries[] = {
     {"Disc scan finished.", "光盘扫描完成。"},
     {"Disc 1 not found: put .cue/.bin/.img in %sdiscs/ and press Rescan discs.",
      "未找到光盘 1：请把 .cue、.bin 或 .img 放到 %sdiscs/，然后按「重新扫描光盘」。"},
+    {"Disc 1 not found: put your .img in %sdiscs/.",
+     "未找到光盘 1：请把你的 .img 放到 %sdiscs/。"},
     {"Add disc...", "添加光盘…"},
     {"Choose a Serial Experiments Lain disc", "选择 Serial Experiments Lain 光盘"},
     {"Disc image (.cue, .bin, .img)", "光盘镜像（.cue、.bin、.img）"},

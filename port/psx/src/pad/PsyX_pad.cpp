@@ -4,8 +4,13 @@
 #include "../PsyX_main.h"
 #include "PsyX_pad.h"
 #include "PsyX/PsyX_public.h"
+#include "PsyX/PsyX_logger.h"
 
 #include <string.h>
+
+#if defined(__SWITCH__)
+#include <switch.h>
+#endif
 
 extern "C"
 {
@@ -30,6 +35,53 @@ u_short PsyX_Pad_UpdateKeyboardInput();
 void	PsyX_Pad_UpdateGameControllerInput(SDL_GameController* cont, LPPADRAW pad);
 void	PsyX_Pad_Event_ControllerAdded(Sint32 deviceId);
 
+#if defined(__SWITCH__)
+/* SDL's Switch backend does not reliably expose the built-in pads as SDL
+ * GameControllers, so read the console's own input state as well. */
+static PadState s_nxPad;
+static int s_nxPadReady = 0;
+
+static void lain_nx_pad_read(LPPADRAW pad)
+{
+	u_short ret = 0xFFFF;
+	u64 k;
+
+	padUpdate(&s_nxPad);
+	k = padGetButtons(&s_nxPad);
+
+	/* Nintendo face layout: A right, B bottom, X top, Y left. A confirms
+	 * (Circle), B cancels (Cross), as on a Japanese PS1 pad. */
+	if (k & HidNpadButton_A)		ret &= ~0x2000; // Circle
+	if (k & HidNpadButton_B)		ret &= ~0x4000; // Cross
+	if (k & HidNpadButton_X)		ret &= ~0x1000; // Triangle
+	if (k & HidNpadButton_Y)		ret &= ~0x8000; // Square
+	if (k & HidNpadButton_L)		ret &= ~0x400;	// L1
+	if (k & HidNpadButton_R)		ret &= ~0x800;	// R1
+	if (k & HidNpadButton_ZL)		ret &= ~0x100;	// L2
+	if (k & HidNpadButton_ZR)		ret &= ~0x200;	// R2
+	if (k & HidNpadButton_Plus)		ret &= ~0x8;	// Start
+	if (k & HidNpadButton_Minus)	ret &= ~0x1;	// Select
+	if (k & HidNpadButton_Up)		ret &= ~0x10;
+	if (k & HidNpadButton_Right)	ret &= ~0x20;
+	if (k & HidNpadButton_Down)		ret &= ~0x40;
+	if (k & HidNpadButton_Left)		ret &= ~0x80;
+
+	HidAnalogStickState ls = padGetStickPos(&s_nxPad, 0);
+	HidAnalogStickState rs = padGetStickPos(&s_nxPad, 1);
+	const s32 DEAD = 8000;
+	if (ls.x < -DEAD)	ret &= ~0x80;
+	if (ls.x > DEAD)	ret &= ~0x20;
+	if (ls.y > DEAD)	ret &= ~0x10;
+	if (ls.y < -DEAD)	ret &= ~0x40;
+
+	*(u_short*)pad->buttons = ret;
+	pad->analog[0] = (u_char)((ls.x + 32767) * 255 / 65534);
+	pad->analog[1] = (u_char)((32767 - ls.y) * 255 / 65534);
+	pad->analog[2] = (u_char)((rs.x + 32767) * 255 / 65534);
+	pad->analog[3] = (u_char)((32767 - rs.y) * 255 / 65534);
+}
+#endif
+
 // Initializes SDL controllers
 int PsyX_Pad_InitSystem()
 {
@@ -39,13 +91,22 @@ int PsyX_Pad_InitSystem()
 
 	memset(g_controllers, 0, sizeof(g_controllers));
 
+#if defined(__SWITCH__)
+	padInitializeDefault(&s_nxPad);
+	s_nxPadReady = 1;
+	lain_log("input: libnx pad ready");
+#endif
+
 	// init keyboard state
 	g_sdlKeyboardState = SDL_GetKeyboardState(NULL);
 
 	if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0)
 	{
 		eprinterr("Failed to initialise SDL GameController subsystem!\n");
+#if !defined(__SWITCH__)
 		return 0;
+#endif
+		// The console still has libnx input below.
 	}
 	/* Haptics are optional (and absent on Switch); never let them block pads. */
 	SDL_InitSubSystem(SDL_INIT_HAPTIC);
@@ -61,6 +122,8 @@ int PsyX_Pad_InitSystem()
 		if (SDL_IsGameController(i))
 			PsyX_Pad_Event_ControllerAdded(i);
 	}
+	lain_log("input: SDL joysticks %d (controllers opened), haptics %d", SDL_NumJoysticks(),
+	         SDL_NumHaptics());
 
 	return 1;
 }
@@ -317,6 +380,13 @@ void PsyX_Pad_UpdateGameControllerInput(SDL_GameController* cont, LPPADRAW pad)
 
 	if (!cont)
 	{
+#if defined(__SWITCH__)
+		if (s_nxPadReady)
+		{
+			lain_nx_pad_read(pad);
+			return;
+		}
+#endif
 		pad->analog[0] = 127;
 		pad->analog[1] = 127;
 		pad->analog[2] = 127;

@@ -575,6 +575,10 @@ extern void LainSpu_SetOutputEnabled (int on);
 extern void LainSpu_Render (short *stereo, int frames);
 /* Host-side gain applied after the SPU master volume (settings slider). */
 extern void LainSpu_SetOutputGain (float gain);
+/* Audio health for diagnostics: frames mixed for the device, and callbacks
+ * that could not be filled (underruns sound as crackles). */
+extern long long LainSpu_OutputFrames (void);
+extern int LainSpu_Underruns (void);
 /* True read of SPU RAM (the game's "SpuRead" is really SpuWrite, see spu_api.c). */
 extern void LainSpu_ReadRam (unsigned int addr, void *dst, unsigned int size);
 #if defined(_LANGUAGE_C_PLUS_PLUS) || defined(__cplusplus) || defined(c_plusplus)
