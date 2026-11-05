@@ -246,6 +246,15 @@ static void scan_sdmc_discs(std::vector<std::string> &queue) {
 #endif
 
 extern "C" int setup_ui_run(Settings *s) {
+#ifdef __SWITCH__
+    /* No display controls on the console: fullscreen, 2x internal resolution. */
+    s->fullscreen = 1;
+    s->width = 1280;
+    s->height = 720;
+    if (s->render_scale == 0) {
+        s->render_scale = 2;
+    }
+#endif
 #if defined(__SWITCH__)
     const char *glsl = "#version 300 es";
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
@@ -352,18 +361,31 @@ extern "C" int setup_ui_run(Settings *s) {
             subjob.state = SubJob::IDLE;
         }
         const bool sub_busy = subjob.state == SubJob::RUNNING;
-        // Tabs; Play/Quit stay below them.
+        // Tabs; Play/Quit stay below them. The console only needs discs and language.
         const float footer = 64.0f;
+#ifdef __SWITCH__
+        const bool setup_tab = true;
+        ImGui::BeginChild("setup_page", ImVec2(0, -footer));
+#else
         ImGui::BeginTabBar("launcher");
         const bool setup_tab = ImGui::BeginTabItem(tr("Setup"));
         if (setup_tab) {
             ImGui::BeginChild("setup_page", ImVec2(0, -footer));
         }
+#endif
         if (setup_tab) {
         // Discs
         ImGui::SeparatorText(tr("Discs"));
         ImGui::Text(tr("Disc 1 (Site A): %s"), tr(disc_status(DISC_1)));
         ImGui::Text(tr("Disc 2 (Site B): %s"), tr(disc_status(DISC_2)));
+#ifdef __SWITCH__
+        ImGui::TextDisabled(tr("Disc folder: %sdiscs/"), settings_data_dir());
+        if (ImGui::Button(tr("Rescan discs"))) {
+            discs_auto_setup(settings_data_dir());
+            last_message = tr("Disc scan finished.");
+        }
+        ImGui::SameLine();
+#endif
         ImGui::BeginDisabled(busy);
         if (ImGui::Button(tr("Add disc..."))) {
 #ifdef __SWITCH__
@@ -393,6 +415,7 @@ extern "C" int setup_ui_run(Settings *s) {
             ImGui::TextWrapped("%s", last_message.c_str());
         }
 
+#ifndef __SWITCH__
         // Display
         ImGui::SeparatorText(tr("Display"));
         ImGui::RadioButton(tr("Windowed"), &s->fullscreen, 0);
@@ -431,6 +454,7 @@ extern "C" int setup_ui_run(Settings *s) {
         }
         ImGui::SameLine();
         ImGui::TextDisabled("%s", tr("12/30 fps screens get in-between frames; game speed unchanged"));
+#endif
 
         // Language
         ImGui::SeparatorText(tr("Language"));
@@ -505,8 +529,11 @@ extern "C" int setup_ui_run(Settings *s) {
         }
         if (setup_tab) {
             ImGui::EndChild();
+#ifndef __SWITCH__
             ImGui::EndTabItem();
+#endif
         }
+#ifndef __SWITCH__
         // Tests/docs: LAIN_SETUP_TAB=mods / unused opens the launcher on that tab.
         static bool first_frame = true;
         const char *want_tab = first_frame ? getenv("LAIN_SETUP_TAB") : nullptr;
@@ -526,16 +553,24 @@ extern "C" int setup_ui_run(Settings *s) {
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
+#endif
 
         // Play
         ImGui::Separator();
         char p1[1024];
         bool have_disc1 = discs_imported(settings_data_dir(), DISC_1, p1, sizeof p1);
-        ImGui::BeginDisabled(!have_disc1 || busy || sub_busy);
+        ImGui::BeginDisabled(busy || sub_busy);
         if (ImGui::Button(tr("Play game"), ImVec2(160, 40))) {
-            s->setup_done = 1;
-            settings_save(s);
-            result = 1;
+            if (!have_disc1) {
+                char miss[512];
+                snprintf(miss, sizeof miss, tr("Disc 1 not found: put .cue/.bin/.img in %sdiscs/ and press Rescan discs."),
+                         settings_data_dir());
+                last_message = miss;
+            } else {
+                s->setup_done = 1;
+                settings_save(s);
+                result = 1;
+            }
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
